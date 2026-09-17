@@ -51,7 +51,7 @@ final class NativeRoom extends FrameLayout implements RoomSession.Listener, Auto
   private final NativeCatalogue catalogue;
   private final NativeRoomOverlay overlay;
   private final TextView title, status, offsetLabel, stageTitle;
-  private final Button pause, vocal, next, fullscreen, lyricToggle, queueButton, reset;
+  private final Button pause, vocal, next, fullscreen, lyricToggle, queueButton, reset, settings;
   private final Handler handler = new Handler(Looper.getMainLooper());
   private JSONObject current, playback = new JSONObject(), stats = new JSONObject();
   private String tab = "stage", mediaEntry = "", lastEnded = "", error = "", lastStatus = "";
@@ -177,7 +177,7 @@ final class NativeRoom extends FrameLayout implements RoomSession.Listener, Auto
     queueButton = nav("已点歌曲", "queue");
     nav("在线找歌", "online");
     sidebar.addView(new View(activity), new LinearLayout.LayoutParams(1, 0, 1));
-    Button settings = TvStyle.button(activity, "设置", "设置", actions::settings);
+    settings = TvStyle.button(activity, "设置", "设置", actions::settings);
     TvStyle.icon(settings, "settings");
     LinearLayout.LayoutParams settingsParams = new LinearLayout.LayoutParams(-1, dp(32));
     settingsParams.topMargin = dp(8);
@@ -369,6 +369,7 @@ final class NativeRoom extends FrameLayout implements RoomSession.Listener, Auto
         button.setPadding(dp(9), 0, dp(6), 0);
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, dp(34));
         p.bottomMargin = dp(5);
+        if (button == settings) p.topMargin = dp(12);
         button.setLayoutParams(p);
       }
     }
@@ -425,7 +426,7 @@ final class NativeRoom extends FrameLayout implements RoomSession.Listener, Auto
         p.rightMargin = dp(22);
         stage.addView(overlay, p);
       } else {
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(112), -2);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
         p.gravity = Gravity.CENTER_HORIZONTAL;
         sidebar.addView(overlay, sidebar.getChildCount() - 1, p);
       }

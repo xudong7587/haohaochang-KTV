@@ -71,7 +71,8 @@ final class NativeRoomOverlay extends LinearLayout implements AutoCloseable {
 
   void fullscreen(boolean value) {
     setVisibility(VISIBLE);
-    qr.setLayoutParams(new LayoutParams(dp(value ? 96 : 84), dp(value ? 96 : 84)));
+    code.setLayoutParams(new LayoutParams(value ? dp(112) : -1, -2));
+    qr.setLayoutParams(new LayoutParams(dp(value ? 96 : 72), dp(value ? 96 : 72)));
     code.setPadding(dp(8), dp(value ? 8 : 4), dp(8), dp(value ? 6 : 2));
     loadQr();
     if (full == value) {

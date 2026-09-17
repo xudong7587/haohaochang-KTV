@@ -126,6 +126,30 @@ public class NativeRoomTest {
   }
 
   @Test
+  public void sidebarQrAndSettingsAlignWithGapAfterRelayout() {
+    for (int[] size : new int[][] {{960, 540}, {1280, 800}, {960, 540}}) {
+      layout(size[0], size[1]);
+      layout(size[0], size[1]);
+      View settings = find("设置");
+      ViewGroup overlay = (ViewGroup) find("扫码点歌与已点歌单");
+      View card = overlay.getChildAt(0);
+      assertEquals(settings.getLeft(), overlay.getLeft() + card.getLeft());
+      assertEquals(settings.getWidth(), card.getWidth());
+      assertTrue(settings.getTop() - overlay.getBottom() >= 12);
+      View parent = (View) settings.getParent();
+      assertEquals(34, settings.getHeight());
+      assertTrue(settings.getBottom() <= parent.getHeight() - parent.getPaddingBottom());
+      Bitmap screenshot = Bitmap.createBitmap(size[0], size[1], Bitmap.Config.ARGB_8888);
+      room.draw(new Canvas(screenshot));
+      java.io.File folder = new java.io.File("build/test-screenshots");
+      folder.mkdirs();
+      try (java.io.FileOutputStream out = new java.io.FileOutputStream(new java.io.File(folder, "sidebar-aligned-" + size[0] + ".png"))) {
+        screenshot.compress(Bitmap.CompressFormat.PNG, 100, out);
+      } catch (java.io.IOException failure) { throw new AssertionError(failure); }
+    }
+  }
+
+  @Test
   public void artistPhotoFillsCardAcrossPhoneRotationsAndTv() throws Exception {
     artistsFixture = "[{\"id\":\"artist-1\",\"artist\":\"测试歌手\",\"count\":12,\"hasPhoto\":true,\"photoVersion\":\"fixture\"}]";
     NativeCatalogue catalogue = (NativeCatalogue) descendants(room).stream()

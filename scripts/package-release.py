@@ -4,6 +4,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 import json
 import hashlib
 import argparse
+import re
 
 options = argparse.ArgumentParser()
 selection = options.add_mutually_exclusive_group()
@@ -15,13 +16,14 @@ root = Path(__file__).resolve().parents[1]
 release = root / 'release'
 release.mkdir(exist_ok=True)
 version = json.loads((root / 'package.json').read_text(encoding='utf-8'))['version']
+tv_version = re.search(r"versionName '([^']+)'", (root / 'android/app/build.gradle').read_text(encoding='utf-8')).group(1)
 guide = (root / 'docs/USER-GUIDE.md').read_text(encoding='utf-8')
 for document in ['VALIDATION.md', 'DEVELOPMENT.md', 'PROJECT-STATUS.md', 'NAS安装与升级.md', 'NPU.md']:
     guide = guide.replace('(' + document + ')', '(https://github.com/xudong7587/haohaochang-KTV/blob/main/docs/' + document + ')')
 guide = guide.replace('(../pc-worker/README.md)', '(https://github.com/xudong7587/haohaochang-KTV/blob/main/pc-worker/README.md)')
 
 bundles = {
-    f'haohaochang-nas-v{version}.zip': ['docker-compose.yaml', 'docker-compose.arm64.yaml', 'deploy/separation-images.json', 'docs/NAS安装与升级.md', 'docs/NPU.md', f'release/haohaochang-tv-v{version}.apk', 'release/实机测试说明.md'],
+    f'haohaochang-nas-v{version}.zip': ['docker-compose.yaml', 'docker-compose.arm64.yaml', 'deploy/separation-images.json', 'docs/NAS安装与升级.md', 'docs/NPU.md', f'release/haohaochang-tv-v{tv_version}.apk', 'release/实机测试说明.md'],
     f'haohaochang-resource-ai-v{version}.zip': ['pc-worker/open.vbs', 'pc-worker/open.ps1', 'pc-worker/start.cmd', 'pc-worker/start.ps1', 'pc-worker/run.py', 'pc-worker/hardware.py',
         'pc-worker/download_runtime.py', 'pc-worker/desktop.py', 'pc-worker/lan.py', 'pc-worker/version.py', 'pc-worker/updater.py', 'pc-worker/update_source.py', 'pc-worker/update_runner.py', 'pc-worker/tray.ps1', 'pc-worker/README.md', 'separator/app.py', 'separator/clipping.py', 'separator/job_store.py', 'separator/inference.py', 'separator/upload_guard.py', 'separator/requirements.txt',
         'separator/video_encoding.py', 'pc-worker/ui/index.html', 'pc-worker/ui/update.js', 'pc-worker/ui/icon.svg', 'pc-worker/ui/icon.png', 'pc-worker/ui/icon.ico'],
