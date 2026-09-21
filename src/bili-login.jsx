@@ -1,11 +1,17 @@
 import React, { useEffect, useState } from "react";
+const credentialFields = [
+  ["sessdata", "SESSDATA"],
+  ["bili_jct", "bili_jct"],
+  ["buvid3", "buvid3"],
+  ["dedeuserid", "DedeUserID"],
+  ["ac_time_value", "ac_time_value"],
+];
 export function BiliLogin({
   request,
   notify,
   onLogin,
   canLogin = true,
   compact = false,
-  scope = "online",
   title = "B 站登录与高清下载",
   description = "",
   refreshKey,
@@ -13,18 +19,31 @@ export function BiliLogin({
   const [account, setAccount] = useState(null),
     [qr, setQr] = useState(null),
     [message, setMessage] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [manual, setManual] = useState({});
   async function check() {
     try {
       setAccount(
         await request(
-          canLogin
-            ? "/admin/bilibili/status?scope=" + scope
-            : "/online/bilibili/status",
+          canLogin ? "/admin/bilibili/status" : "/online/bilibili/status",
         ),
       );
     } catch (e) {
       setMessage(e.message);
+    }
+  }
+  async function saveCredentials(value) {
+    setBusy(true);
+    try {
+      await request("/admin/bilibili/credentials", value, "POST");
+      setManual({});
+      setMessage(value.clearCookie ? "已清除登录凭证" : "凭证已保存");
+      await check();
+      onLogin?.();
+    } catch (e) {
+      notify(e.message);
+    } finally {
+      setBusy(false);
     }
   }
   useEffect(() => {
@@ -77,14 +96,14 @@ export function BiliLogin({
       {!compact && (
         <p>
           {description ||
-            "在线找歌、预览和在线下载使用此账号；收藏夹自动下载另有独立登录，互不影响。最高画质按账号权限和原视频下载，支持 480p 等老 MV，不设最低 720p 限制。部分超清画质需要大会员，原视频也需要提供该画质。"}
+            "在线找歌、预览、在线下载和收藏夹同步都使用这一份登录，只需在这里登录一次。最高画质按账号权限和原视频下载，支持 480p 等老 MV，不设最低 720p 限制；部分超清画质需要大会员，原视频也需要提供该画质。"}
         </p>
       )}
       {canLogin && account?.loggedIn && (
         <p className="muted">
           {account.autoRefresh
             ? "已启用登录凭证自动维护"
-            : "当前凭证没有刷新令牌；重新扫码可启用自动维护"}
+            : "当前凭证没有刷新令牌（ac_time_value）；重新扫码可启用自动维护，不填也能继续下载"}
           {["retrying", "confirm-pending"].includes(account.refreshStatus)
             ? "，维护暂未完成，将自动重试，现有登录保留。"
             : "。"}
@@ -98,11 +117,7 @@ export function BiliLogin({
             onClick={async () => {
               setBusy(true);
               try {
-                const result = await request(
-                  "/admin/bilibili/qr",
-                  { scope },
-                  "POST",
-                );
+                const result = await request("/admin/bilibili/qr", {}, "POST");
                 setQr({
                   ...result,
                   expires: Date.now() + result.expiresIn * 1000,
@@ -128,6 +143,61 @@ export function BiliLogin({
         <img src={qr.image} width="220" height="220" alt="B站登录二维码" />
       )}
       {message && <p role="status">{message}</p>}
+      {canLogin && (
+        <details>
+          <summary>
+            手动填写 bili-sync 凭证
+            {account?.hasCookie === false ? "（当前未保存）" : ""}
+          </summary>
+          <p>
+            可以逐项粘贴 bili-sync 的字段，也可以把一整条 Cookie
+            粘在最后。留空的字段保留已保存的值；ac_time_value 现在不必须，留空只影响自动维护。
+          </p>
+          {credentialFields.map(([key, label]) => (
+            <label key={key}>
+              {label}
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={manual[key] || ""}
+                placeholder="留空保留已保存的值"
+                onChange={(e) =>
+                  setManual({ ...manual, [key]: e.target.value })
+                }
+              />
+            </label>
+          ))}
+          <label>
+            Cookie（可整条粘贴，优先于上面的字段）
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={manual.cookie || ""}
+              placeholder="SESSDATA=…; bili_jct=…; DedeUserID=…"
+              onChange={(e) =>
+                setManual({ ...manual, cookie: e.target.value })
+              }
+            />
+          </label>
+          <div className="actions">
+            <button
+              type="button"
+              className="primary"
+              disabled={busy}
+              onClick={() => saveCredentials(manual)}
+            >
+              保存凭证
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => saveCredentials({ ...manual, clearCookie: true })}
+            >
+              清除已保存凭证
+            </button>
+          </div>
+        </details>
+      )}
     </div>
   );
 }

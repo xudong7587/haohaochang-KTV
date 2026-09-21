@@ -202,8 +202,6 @@ export function pcApi({ app, admin, store, discovery }) {
     const secrets = [
       store.get("favorites", {}).cookie,
       ...Object.values(store.get("favorites", {}).credentials || {}),
-      store.get("bili-online", {}).cookie,
-      ...Object.values(store.get("bili-online", {}).credentials || {}),
       store.get("ai", {}).apiKey,
       store.get("ai", {}).pcApiKey,
       store.get("enrichment", {}).apiKey,

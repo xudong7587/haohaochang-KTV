@@ -37,19 +37,69 @@ test("online default upgrades old settings once and preserves later explicit opt
   let store = openStore(dir);
   assert.equal(store.get("onlineEnabled"), true);
   assert.equal(store.get("favorites").cookie, "SESSDATA=test-saved-cookie");
-  // 升级后在线登录与收藏夹登录分开保存，原共享 Cookie 复制给在线用途，
-  // 刷新令牌只留在收藏夹一侧，避免两端轮换同一份凭证。
-  assert.equal(store.get("bili-online").cookie, "SESSDATA=test-saved-cookie");
-  assert.equal(store.get("bili-online").credentials.ac_time_value, "");
   assert.equal(store.get("favorites").credentials.ac_time_value, "test-token");
   store.set("onlineEnabled", false);
-  store.set("bili-online", { cookie: "SESSDATA=online-only" });
   store.db.close();
   store = openStore(dir);
   assert.equal(store.get("onlineEnabled"), false);
-  assert.equal(store.get("bili-online").cookie, "SESSDATA=online-only");
   assert.equal(store.get("favorites").cookie, "SESSDATA=test-saved-cookie");
   store.db.close();
+});
+
+test("1.1.1 split logins merge back into one record without losing the maintained credential", async (t) => {
+  const split = {
+    onlineEnabled: true,
+    biliLoginSplit: true,
+    favorites: {
+      cookie: "SESSDATA=favorite-side",
+      enabled: true,
+      favoriteId: "123",
+      credentials: { sessdata: "favorite-side", ac_time_value: "favorite-token" },
+    },
+    "bili-online": {
+      cookie: "SESSDATA=online-side",
+      credentials: { sessdata: "online-side", ac_time_value: "" },
+    },
+  };
+  const dir = await mkdtemp(path.join(os.tmpdir(), "ktv-login-merge-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  await writeFile(path.join(dir, "settings.json"), JSON.stringify(split));
+  let store = openStore(dir);
+  // 收藏夹一侧带刷新令牌，是唯一能自动维护的凭证，合并时保留它。
+  assert.equal(store.get("favorites").cookie, "SESSDATA=favorite-side");
+  assert.equal(store.get("favorites").credentials.ac_time_value, "favorite-token");
+  assert.equal(store.get("favorites").favoriteId, "123");
+  assert.equal(store.get("bili-online"), undefined);
+  store.db.close();
+  store = openStore(dir);
+  assert.equal(store.get("favorites").cookie, "SESSDATA=favorite-side");
+  assert.equal(store.get("bili-online"), undefined);
+  store.db.close();
+
+  // 反向：1.1.1 里用新扫码登录在线一侧时，刷新令牌在在线记录上，合并保留在线那份。
+  const scanned = await mkdtemp(path.join(os.tmpdir(), "ktv-login-merge-"));
+  t.after(() => rm(scanned, { recursive: true, force: true }));
+  await writeFile(
+    path.join(scanned, "settings.json"),
+    JSON.stringify({
+      ...split,
+      favorites: {
+        cookie: "SESSDATA=favorite-side",
+        enabled: true,
+        favoriteId: "123",
+        credentials: { sessdata: "favorite-side", ac_time_value: "" },
+      },
+      "bili-online": {
+        cookie: "SESSDATA=online-side",
+        credentials: { sessdata: "online-side", ac_time_value: "online-token" },
+      },
+    }),
+  );
+  const other = openStore(scanned);
+  assert.equal(other.get("favorites").cookie, "SESSDATA=online-side");
+  assert.equal(other.get("favorites").favoriteId, "123");
+  assert.equal(other.get("bili-online"), undefined);
+  other.db.close();
 });
 
 test("three background jobs run concurrently; online work uses reserved slot and its children retain priority", async (t) => {

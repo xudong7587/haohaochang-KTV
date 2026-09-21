@@ -137,7 +137,7 @@ export function onlineApi({
   });
   let loginCache;
   app.get("/api/online/bilibili/status", member, async (req, res) => {
-    const cookie = await ensureBiliCredentials(store, { scope: "online" });
+    const cookie = await ensureBiliCredentials(store);
     if (
       !loginCache ||
       loginCache.cookie !== cookie ||
@@ -168,7 +168,7 @@ export function onlineApi({
       await searchSongs(
         title,
         artist,
-        await ensureBiliCredentials(store, { scope: "online" }),
+        await ensureBiliCredentials(store),
         page,
       ),
     );
@@ -182,7 +182,7 @@ export function onlineApi({
     res.json(
       await previews.create(
         canonicalVideo(req.body.url),
-        await ensureBiliCredentials(store, { scope: "online" }),
+        await ensureBiliCredentials(store),
         dir,
         {
           refresh: req.body.refresh === true,

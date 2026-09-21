@@ -14,32 +14,56 @@ const names = {
   buvid3: "buvid3",
   dedeuserid: "DedeUserID",
 };
-// 在线找歌／下载和收藏夹自动下载各保存一份登录。B站刷新会轮换 refresh_token，
-// 同一份凭证被两处同时维护时，一端轮换就会让另一端失效，因此两处必须独立。
-const scopes = {
-  online: {
-    record: "bili-online",
-    state: "bili-online-refresh-state",
-    confirm: "bili-online-refresh-confirm",
-  },
-  favorites: {
-    record: "favorites",
-    state: "bili-refresh-state",
-    confirm: "bili-refresh-confirm",
-  },
-};
-export const biliScopes = Object.keys(scopes);
-export function biliScope(scope = "online") {
-  const target = scopes[scope];
-  if (!target) throw new Error("未知的 B 站登录用途");
-  return target;
+// 在线找歌、在线下载、更新画质和收藏夹同步共用同一份 B 站登录。扫码和手动凭证
+// 都写入这一条记录，各处只读取它，避免两份 Cookie 互相覆盖。
+const record = "favorites";
+const refreshState = "bili-refresh-state";
+const refreshConfirm = "bili-refresh-confirm";
+const credentialFields = [
+  "sessdata",
+  "bili_jct",
+  "buvid3",
+  "dedeuserid",
+  "ac_time_value",
+];
+export function biliCookie(store) {
+  return store.get(record, {}).cookie || "";
 }
-export function biliCookie(store, scope = "online") {
-  return store.get(biliScope(scope).record, {}).cookie || "";
-}
-export function saveBiliLogin(store, scope, { cookie, credentials }) {
-  const { record } = biliScope(scope);
+export function saveBiliLogin(store, { cookie, credentials }) {
   store.set(record, { ...store.get(record, {}), cookie, credentials });
+}
+// 手动填写凭证：bili-sync 的五个字段或一整条 Cookie，保留未填写的已保存值。
+export function biliLoginFromInput(input = {}, old = {}) {
+  const persisted = old.cookie
+    ? credentialsFromCookie(old.cookie, old.credentials?.ac_time_value || "")
+    : old.credentials || {};
+  const credentials = Object.fromEntries(
+    credentialFields.map((key) => [
+      key,
+      input.clearCookie ? "" : String(input[key] || persisted[key] || "").trim(),
+    ]),
+  );
+  const supplied = credentialFields.some(
+    (key) => key !== "ac_time_value" && !!input[key],
+  );
+  const cookie = input.clearCookie
+    ? ""
+    : String(input.cookie || old.cookie || "").slice(0, 16000);
+  if (/[\r\n]/.test(cookie)) throw new Error("Cookie 不能包含换行");
+  if (Object.values(credentials).some((value) => /[;\r\n\t]/.test(value)))
+    throw new Error("凭证字段不能包含分号或换行");
+  return {
+    cookie: input.cookie
+      ? cookie
+      : supplied
+        ? `SESSDATA=${credentials.sessdata}; bili_jct=${credentials.bili_jct}; buvid3=${credentials.buvid3}; DedeUserID=${credentials.dedeuserid}`
+        : cookie,
+    credentials: input.clearCookie
+      ? credentials
+      : input.cookie
+        ? credentialsFromCookie(cookie, input.ac_time_value || "")
+        : credentials,
+  };
 }
 const pending = new WeakMap();
 const fingerprint = (cookie) =>
@@ -87,46 +111,42 @@ async function json(response) {
 
 export async function ensureBiliCredentials(
   store,
-  { fetcher = fetch, now = Date.now, force = false, scope = "online" } = {},
+  { fetcher = fetch, now = Date.now, force = false } = {},
 ) {
-  biliScope(scope);
-  if (store.readOnlyMedia) return biliCookie(store, scope);
-  const operations = pending.get(store) || new Map();
-  pending.set(store, operations);
-  if (operations.has(scope)) return operations.get(scope);
-  const operation = maintain(store, { fetcher, now, force, scope });
-  operations.set(scope, operation);
+  if (store.readOnlyMedia) return biliCookie(store);
+  if (pending.has(store)) return pending.get(store);
+  const operation = maintain(store, { fetcher, now, force });
+  pending.set(store, operation);
   try {
     return await operation;
   } finally {
-    operations.delete(scope);
+    pending.delete(store);
   }
 }
 
-async function maintain(store, { fetcher, now, force, scope }) {
-  const target = biliScope(scope),
-    config = store.get(target.record, {}),
+async function maintain(store, { fetcher, now, force }) {
+  const config = store.get(record, {}),
     cookie = config.cookie || "";
   if (!cookie) return "";
   const refreshToken = config.credentials?.ac_time_value || "";
   if (!refreshToken) return cookie; // Legacy/raw cookies remain usable; never invent a token.
   const hash = fingerprint(cookie),
-    previous = store.get(target.state, {});
+    previous = store.get(refreshState, {});
   if (!force && previous.cookieHash === hash && previous.nextCheck > now())
     return cookie;
-  const current = () => store.get(target.record, {});
+  const current = () => store.get(record, {});
   const unchanged = () =>
     current().cookie === cookie &&
     current().credentials?.ac_time_value === refreshToken;
   const state = (patch, currentCookie = cookie) =>
-    store.set(target.state, {
+    store.set(refreshState, {
       cookieHash: fingerprint(currentCookie),
       checkedAt: now(),
       nextCheck: now() + 24 * 3600000,
       ...patch,
     });
   try {
-    const waiting = store.get(target.confirm, null);
+    const waiting = store.get(refreshConfirm, null);
     if (waiting?.cookieHash === hash) {
       await json(
         await request(passport + "confirm/refresh", cookie, fetcher, {
@@ -135,7 +155,7 @@ async function maintain(store, { fetcher, now, force, scope }) {
         }),
       );
       if (!unchanged()) return current().cookie || "";
-      store.set(target.confirm, null);
+      store.set(refreshConfirm, null);
     }
     const info = await json(
       await request(passport + "cookie/info", cookie, fetcher),
@@ -206,12 +226,12 @@ async function maintain(store, { fetcher, now, force, scope }) {
       ...Object.entries(names).map(([key, name]) => `${name}=${updates[key]}`),
     ].join("; ");
     // Persist the new usable credentials before invalidating the old refresh token.
-    store.set(target.record, {
+    store.set(record, {
       ...current(),
       cookie: nextCookie,
       credentials: updates,
     });
-    store.set(target.confirm, {
+    store.set(refreshConfirm, {
       cookieHash: fingerprint(nextCookie),
       oldToken: refreshToken,
     });
@@ -223,7 +243,7 @@ async function maintain(store, { fetcher, now, force, scope }) {
         }),
       );
       if (current().cookie === nextCookie) {
-        store.set(target.confirm, null);
+        store.set(refreshConfirm, null);
         state({ status: "refreshed", refreshedAt: now() }, nextCookie);
       }
     } catch {
@@ -242,12 +262,12 @@ async function maintain(store, { fetcher, now, force, scope }) {
   }
 }
 
-export function biliCredentialStatus(store, scope = "online") {
-  const target = biliScope(scope),
-    config = store.get(target.record, {}),
-    saved = store.get(target.state, {});
+export function biliCredentialStatus(store) {
+  const config = store.get(record, {}),
+    saved = store.get(refreshState, {});
   const relevant = saved.cookieHash === fingerprint(config.cookie || "");
   return {
+    hasCookie: !!config.cookie,
     autoRefresh: !!config.credentials?.ac_time_value,
     refreshStatus: relevant ? saved.status : "unchecked",
     lastChecked: relevant ? saved.checkedAt : null,

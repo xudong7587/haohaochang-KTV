@@ -1,4 +1,16 @@
-# 开发状态 · v1.1.1
+# 开发状态 · v1.1.2
+
+## B 站登录合并为一处
+
+用户反馈两处扫码登录不方便，要求在线找歌和收藏夹同步共用同一份 Cookie。1.1.1 的按用途拆分（`bili-online` + `favorites`）被撤销：`server/bili-credentials.js` 恢复单条 `favorites` 记录、单套刷新状态（`bili-refresh-state`／`bili-refresh-confirm`），`biliCookie`、`saveBiliLogin`、`ensureBiliCredentials`、`biliCredentialStatus` 都不再带用途参数；在线侧调用点（在线搜索、在线任务下载、链接解析、来源信息、封面搜索、更新画质、`/api/online/*`）和收藏夹侧调用点（收藏夹同步、收藏夹下载、分 P 查询）读同一条记录。
+
+手动凭证逻辑从 `favoriteConfig` 抽成 `biliLoginFromInput`（bili-sync 五字段或整条 Cookie，留空保留已保存值，`clearCookie` 清空），收藏夹设置与登录凭证因此可分别保存：`favoriteConfig` 仍处理收藏夹 ID／间隔／启用，登录凭证走新增的 `POST /api/admin/bilibili/credentials`，避免保存凭证时重置收藏夹设置。扫码登录仍写同一条记录并保留收藏夹设置。
+
+升级迁移：`settings.json` 里存在 `bili-online` 或 `biliLoginSplit` 时，把两份登录并回 `favorites` 并删除拆分记录——优先保留带 `ac_time_value`、能自动维护的一份（1.1.1 的复制体没有令牌，因此通常保留收藏夹一侧；在 1.1.1 里用扫码登录过在线一侧时则保留在线那份），若只有一侧有 Cookie 也用那一份。
+
+设置页“在线资源”只保留一张“B 站登录”卡片：扫码、检测状态、手动填写 bili-sync 凭证、清除凭证都在这里；收藏夹卡片只剩启用、收藏夹 ID、检查间隔、保存和立即同步。
+
+本地 Node 240 项中 239 通过、1 项 Linux 专属跳过，含“在线与收藏夹读同一条记录”“扫码与手动凭证保留收藏夹设置”“1.1.1 两份登录合并保留带令牌的一份”等新用例；生产前端构建与设置页浏览器检查（单一登录卡片、面板切换、移动宽度）通过。生产 NAS 尚未更新。
 
 ## 在线找歌与收藏夹登录分开保存
 

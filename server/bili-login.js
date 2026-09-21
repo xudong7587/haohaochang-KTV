@@ -3,7 +3,7 @@ import {
   biliCredentialStatus,
   credentialsFromCookie,
   saveBiliLogin,
-  biliScopes,
+  biliLoginFromInput,
 } from "./bili-credentials.js";
 import QRCode from "qrcode";
 import { randomUUID } from "node:crypto";
@@ -11,16 +11,7 @@ const headers = {
   "User-Agent": "Mozilla/5.0",
   Referer: "https://www.bilibili.com/",
 };
-// 在线找歌和收藏夹自动下载各用一份登录；扫码只写入选中的用途。
-const scopeOf = (req = {}) => {
-  const value = String(req.query?.scope || req.body?.scope || "online");
-  if (!biliScopes.includes(value)) throw new Error("未知的 B 站登录用途");
-  return value;
-};
-const loginMessages = {
-  online: "已登录，在线找歌和在线下载使用此账号",
-  favorites: "已登录，收藏夹自动下载使用此账号，与在线找歌互不影响",
-};
+const loginMessage = "已登录，在线找歌和收藏夹同步共用此账号";
 async function call(url, cookie, fetcher = fetch) {
   const response = await fetcher(url, {
     headers: { ...headers, ...(cookie ? { Cookie: cookie } : {}) },
@@ -48,19 +39,21 @@ export async function biliLoginStatus(cookie = "", fetcher = fetch) {
 }
 export function biliLoginApi({ app, admin, store, fetcher = fetch }) {
   const sessions = new Map();
-  app.get("/api/admin/bilibili/status", admin, async (req, res) => {
-    const scope = scopeOf(req);
+  app.get("/api/admin/bilibili/status", admin, async (req, res) =>
     res.json({
-      scope,
       ...(await biliLoginStatus(
-        await ensureBiliCredentials(store, { fetcher, scope }),
+        await ensureBiliCredentials(store, { fetcher }),
         fetcher,
       )),
-      ...biliCredentialStatus(store, scope),
-    });
+      ...biliCredentialStatus(store),
+    }),
+  );
+  app.post("/api/admin/bilibili/credentials", admin, (req, res) => {
+    const login = biliLoginFromInput(req.body || {}, store.get("favorites", {}));
+    saveBiliLogin(store, login);
+    res.json({ ok: true, hasCookie: !!login.cookie });
   });
   app.post("/api/admin/bilibili/qr", admin, async (req, res) => {
-    const scope = scopeOf(req);
     for (const [id, value] of sessions)
       if (value.expires < Date.now()) sessions.delete(id);
     if (sessions.size >= 5) throw new Error("已有登录二维码，请稍后重试");
@@ -84,17 +77,11 @@ export function biliLoginApi({ app, admin, store, fetcher = fetch }) {
       throw new Error("B站未提供有效登录二维码");
     const id = randomUUID();
     sessions.set(id, {
-      scope,
       key: body.data.qrcode_key,
       expires: Date.now() + 180000,
       last: 0,
     });
-    res.json({
-      id,
-      scope,
-      image: await QRCode.toDataURL(url.href),
-      expiresIn: 180,
-    });
+    res.json({ id, image: await QRCode.toDataURL(url.href), expiresIn: 180 });
   });
   app.post("/api/admin/bilibili/qr/:id", admin, async (req, res) => {
     const session = sessions.get(req.params.id);
@@ -103,7 +90,6 @@ export function biliLoginApi({ app, admin, store, fetcher = fetch }) {
         status: "expired",
         message: "二维码已过期，请重新生成",
       });
-    const scope = session.scope;
     if (Date.now() - session.last < 2500)
       return res.json({ status: "pending", message: "等待手机确认" });
     session.last = Date.now();
@@ -141,7 +127,7 @@ export function biliLoginApi({ app, admin, store, fetcher = fetch }) {
         .join("; ");
       const status = await biliLoginStatus(cookie, fetcher);
       if (!status.loggedIn) throw new Error("登录尚未生效，请重新扫码");
-      saveBiliLogin(store, scope, {
+      saveBiliLogin(store, {
         cookie,
         credentials: credentialsFromCookie(
           cookie,
@@ -151,10 +137,9 @@ export function biliLoginApi({ app, admin, store, fetcher = fetch }) {
       sessions.delete(req.params.id);
       return res.json({
         status: "success",
-        scope,
         ...status,
-        ...biliCredentialStatus(store, scope),
-        message: loginMessages[scope],
+        ...biliCredentialStatus(store),
+        message: loginMessage,
       });
     }
     const code = body.data?.code;

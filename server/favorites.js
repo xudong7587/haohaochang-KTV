@@ -1,4 +1,4 @@
-import { credentialsFromCookie } from "./bili-credentials.js";
+import { biliLoginFromInput } from "./bili-credentials.js";
 export function favoriteConfig(input, old = {}) {
   let id = String(input.favoriteId || "").trim();
   if (id.startsWith("http")) {
@@ -8,45 +8,12 @@ export function favoriteConfig(input, old = {}) {
   if (id && !/^\d{1,24}$/.test(id))
     throw new Error("请填写收藏夹 ID 或带 fid 的收藏夹链接，不是用户 UID");
   if (input.enabled && !id) throw new Error("请填写要监控的收藏夹");
-  const fields = [
-    "sessdata",
-    "bili_jct",
-    "buvid3",
-    "dedeuserid",
-    "ac_time_value",
-  ];
-  const persisted = old.cookie
-    ? credentialsFromCookie(old.cookie, old.credentials?.ac_time_value || "")
-    : old.credentials || {};
-  const credentials = Object.fromEntries(
-    fields.map((k) => [
-      k,
-      input.clearCookie ? "" : String(input[k] || persisted[k] || "").trim(),
-    ]),
-  );
-  const supplied = fields.some(
-    (key) => key !== "ac_time_value" && !!input[key],
-  );
-  const cookie = input.clearCookie
-    ? ""
-    : String(input.cookie || old.cookie || "").slice(0, 16000);
-  if (/[\r\n]/.test(cookie)) throw new Error("Cookie 不能包含换行");
-  if (Object.values(credentials).some((v) => /[;\r\n\t]/.test(v)))
-    throw new Error("凭证字段不能包含分号或换行");
-  const assembled = input.cookie
-    ? cookie
-    : supplied
-      ? `SESSDATA=${credentials.sessdata}; bili_jct=${credentials.bili_jct}; buvid3=${credentials.buvid3}; DedeUserID=${credentials.dedeuserid}`
-      : cookie;
+  const { cookie, credentials } = biliLoginFromInput(input, old);
   return {
     enabled: input.enabled === true,
     favoriteId: id,
-    cookie: assembled,
-    credentials: input.clearCookie
-      ? credentials
-      : input.cookie
-        ? credentialsFromCookie(cookie, input.ac_time_value || "")
-        : credentials,
+    cookie,
+    credentials,
     intervalMinutes: Math.max(
       5,
       Math.min(1440, Number(input.intervalMinutes) || 10),

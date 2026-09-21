@@ -260,13 +260,6 @@ test("QR login accepts current official account domain and stores credentials on
       {
         favoriteId: "123",
         enabled: true,
-        cookie: "SESSDATA=favorite-account",
-        credentials: { sessdata: "old" },
-      },
-    ],
-    [
-      "bili-online",
-      {
         cookie: "old-expired",
         credentials: { sessdata: "old" },
       },
@@ -362,36 +355,42 @@ test("QR login accepts current official account domain and stores credentials on
   assert.equal(qr.qrcode_key, undefined);
   const pending = await (await request("/qr/" + qr.id)).json();
   assert.equal(pending.status, "pending");
-  assert.equal(store.get("bili-online").cookie, "old-expired");
-  assert.equal(store.get("favorites").cookie, "SESSDATA=favorite-account");
+  assert.equal(store.get("favorites").cookie, "old-expired");
   const fresh = await (await request("/qr")).json();
   code = 0;
   const success = await (await request("/qr/" + fresh.id)).json();
   assert.equal(success.status, "success");
   assert.equal(success.cookie, undefined);
-  assert.equal(success.scope, "online");
-  const saved = store.get("bili-online");
+  const saved = store.get("favorites");
   assert.match(saved.cookie, /SESSDATA=new-fixture/);
   assert.equal(saved.credentials.sessdata, "new-fixture");
   assert.equal(saved.credentials.ac_time_value, "qr-refresh-fixture");
   assert.equal(success.credentials, undefined);
-  // 在线扫码不触碰收藏夹登录，收藏夹保存的账号和设置保持不变。
-  assert.equal(store.get("favorites").cookie, "SESSDATA=favorite-account");
+  // 扫码只写这一条共享记录，收藏夹设置保持原样，在线找歌读到同一份 Cookie。
+  assert.equal(store.get("bili-online"), undefined);
   assert.equal(store.get("favorites").favoriteId, "123");
   assert.equal(store.get("favorites").enabled, true);
-  // 收藏夹侧扫码只更新收藏夹登录。
-  const favoriteScan = await (
-    await request("/qr?scope=favorites", { scope: "favorites" })
+  assert.match(success.message, /在线找歌和收藏夹同步共用/);
+  // 手动填写凭证也写同一条记录，并保留收藏夹设置。
+  const manual = await (
+    await request("/credentials", {
+      sessdata: "manual-sess",
+      bili_jct: "manual-csrf",
+      dedeuserid: "456",
+    })
   ).json();
-  assert.equal(favoriteScan.scope, "favorites");
-  const favoriteSuccess = await (
-    await request("/qr/" + favoriteScan.id)
-  ).json();
-  assert.equal(favoriteSuccess.status, "success");
-  assert.match(store.get("favorites").cookie, /SESSDATA=new-fixture/);
+  assert.equal(manual.ok, true);
+  assert.match(store.get("favorites").cookie, /SESSDATA=manual-sess/);
   assert.equal(store.get("favorites").favoriteId, "123");
   assert.equal(store.get("favorites").enabled, true);
-  assert.match(store.get("bili-online").cookie, /SESSDATA=new-fixture/);
+  assert.equal(store.get("favorites").credentials.buvid3, "device-fixture");
+  assert.equal(
+    (await (await request("/credentials", { clearCookie: true })).json()).ok,
+    true,
+  );
+  assert.equal(store.get("favorites").cookie, "");
+  assert.equal(store.get("favorites").credentials.sessdata, "");
+  assert.equal(store.get("favorites").favoriteId, "123");
   assert.deepEqual(
     await biliLoginStatus("expired", async () => json({ code: -101 })),
     { loggedIn: false },

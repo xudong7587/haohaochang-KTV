@@ -25,12 +25,8 @@ export function startBackgroundTasks({
   let credentialsPromise;
   const maintainCredentials = () => {
     if (stopped || !enabled || credentialsPromise) return;
-    // 在线找歌和收藏夹自动下载各有一份登录，分别维护刷新。
-    credentialsPromise = Promise.all(
-      ["online", "favorites"].map((scope) =>
-        ensureBiliCredentials(store, { scope }),
-      ),
-    )
+    // 在线找歌和收藏夹自动下载共用同一份登录，只维护这一份刷新。
+    credentialsPromise = ensureBiliCredentials(store)
       .catch(() => {})
       .finally(() => {
         credentialsPromise = null;

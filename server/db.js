@@ -110,19 +110,25 @@ export function openStore(dir) {
     config.onlineEnabled = true;
     config.onlineDefaultMigrated = true;
   }
-  // 在线找歌与收藏夹自动下载各用一份登录。升级时把原有共享 Cookie 复制给
-  // 在线用途，但只让收藏夹一侧保留刷新令牌，避免两端轮换同一份凭证。
-  if (!config.biliLoginSplit) {
-    const favorites = config.favorites || {};
-    if (favorites.cookie && !(config["bili-online"] || {}).cookie)
-      config["bili-online"] = {
-        cookie: favorites.cookie,
-        credentials: {
-          ...(favorites.credentials || {}),
-          ac_time_value: "",
-        },
-      };
-    config.biliLoginSplit = true;
+  // 1.1.1 曾把在线找歌和收藏夹拆成两份登录；1.1.2 恢复为一份，把当时分开保存的
+  // 凭证并回 favorites。优先保留仍能自动维护（带刷新令牌）的那一份，避免多令牌轮换。
+  if (config["bili-online"] || config.biliLoginSplit) {
+    const favorites = config.favorites || {},
+      online = config["bili-online"] || {},
+      keep =
+        online.cookie &&
+        (!favorites.cookie ||
+          (!!online.credentials?.ac_time_value &&
+            !favorites.credentials?.ac_time_value))
+          ? online
+          : favorites;
+    config.favorites = {
+      ...favorites,
+      cookie: keep.cookie || favorites.cookie || "",
+      credentials: keep.credentials || favorites.credentials || {},
+    };
+    delete config["bili-online"];
+    delete config.biliLoginSplit;
   }
   flush(config);
   const keys = new Set([
@@ -132,7 +138,6 @@ export function openStore(dir) {
     "autoImport",
     "enrichment",
     "favorites",
-    "bili-online",
     "lyricsStyle",
   ]);
   db.prepare(
