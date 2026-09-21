@@ -23,16 +23,32 @@ test("online default upgrades old settings once and preserves later explicit opt
     path.join(dir, "settings.json"),
     JSON.stringify({
       onlineEnabled: false,
-      favorites: { cookie: "test-saved-cookie" },
+      favorites: {
+        cookie: "SESSDATA=test-saved-cookie",
+        enabled: true,
+        favoriteId: "123",
+        credentials: {
+          sessdata: "test-saved-cookie",
+          ac_time_value: "test-token",
+        },
+      },
     }),
   );
   let store = openStore(dir);
   assert.equal(store.get("onlineEnabled"), true);
-  assert.equal(store.get("favorites").cookie, "test-saved-cookie");
+  assert.equal(store.get("favorites").cookie, "SESSDATA=test-saved-cookie");
+  // 升级后在线登录与收藏夹登录分开保存，原共享 Cookie 复制给在线用途，
+  // 刷新令牌只留在收藏夹一侧，避免两端轮换同一份凭证。
+  assert.equal(store.get("bili-online").cookie, "SESSDATA=test-saved-cookie");
+  assert.equal(store.get("bili-online").credentials.ac_time_value, "");
+  assert.equal(store.get("favorites").credentials.ac_time_value, "test-token");
   store.set("onlineEnabled", false);
+  store.set("bili-online", { cookie: "SESSDATA=online-only" });
   store.db.close();
   store = openStore(dir);
   assert.equal(store.get("onlineEnabled"), false);
+  assert.equal(store.get("bili-online").cookie, "SESSDATA=online-only");
+  assert.equal(store.get("favorites").cookie, "SESSDATA=test-saved-cookie");
   store.db.close();
 });
 

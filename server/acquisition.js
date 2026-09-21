@@ -10,6 +10,7 @@ import {
   downloadAudio,
   withBiliCookie,
 } from "./sources.js";
+import { biliCookie } from "./bili-credentials.js";
 import { run } from "./process.js";
 import { importMedia, importKey } from "./library.js";
 import { prepareSong, probe, safeMedia } from "./media.js";
@@ -86,7 +87,7 @@ export async function acquireSong(
     };
   search =
     search === onlineSearch
-      ? (q, p) => onlineSearch(q, p, store.get("favorites", {}).cookie)
+      ? (q, p) => onlineSearch(q, p, biliCookie(store))
       : search;
   const found = payload.candidate
     ? [createSourceCandidate(payload.candidate)]
@@ -125,7 +126,7 @@ export async function acquireSong(
         .digest("hex")
         .slice(0, 24);
       const { file } = await withBiliCookie(
-        store.get("favorites", {}).cookie,
+        biliCookie(store),
         path.join(downloads, ".credentials"),
         (cookieFile) =>
           downloadAudio(candidate.canonicalUrl, downloads, cookieFile),
@@ -296,7 +297,7 @@ export async function findVideo(
     );
   }
   if (search === onlineSearch)
-    search = (q, p) => onlineSearch(q, p, store.get("favorites", {}).cookie);
+    search = (q, p) => onlineSearch(q, p, biliCookie(store));
   const rejected = store.get("mtv-rejected:" + song.id, []);
   const found = selected
     ? [selected]
@@ -307,7 +308,7 @@ export async function findVideo(
   for (const candidate of found.slice(0, selected ? 1 : 2)) {
     try {
       const { file } = await withBiliCookie(
-        store.get("favorites", {}).cookie,
+        biliCookie(store),
         path.join(downloads, ".credentials"),
         (cookieFile) => download(candidate.canonicalUrl, downloads, cookieFile),
       );

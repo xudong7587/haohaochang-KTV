@@ -110,6 +110,20 @@ export function openStore(dir) {
     config.onlineEnabled = true;
     config.onlineDefaultMigrated = true;
   }
+  // 在线找歌与收藏夹自动下载各用一份登录。升级时把原有共享 Cookie 复制给
+  // 在线用途，但只让收藏夹一侧保留刷新令牌，避免两端轮换同一份凭证。
+  if (!config.biliLoginSplit) {
+    const favorites = config.favorites || {};
+    if (favorites.cookie && !(config["bili-online"] || {}).cookie)
+      config["bili-online"] = {
+        cookie: favorites.cookie,
+        credentials: {
+          ...(favorites.credentials || {}),
+          ac_time_value: "",
+        },
+      };
+    config.biliLoginSplit = true;
+  }
   flush(config);
   const keys = new Set([
     "publicUrl",
@@ -118,6 +132,7 @@ export function openStore(dir) {
     "autoImport",
     "enrichment",
     "favorites",
+    "bili-online",
     "lyricsStyle",
   ]);
   db.prepare(

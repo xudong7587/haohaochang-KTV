@@ -2,6 +2,7 @@ import { replaceVideo } from "../video-replacement.js";
 import { withBiliCookie } from "../sources.js";
 import { downloadVideo } from "../media.js";
 import { refreshVideo } from "./refresh-video.js";
+import { biliCookie } from "../bili-credentials.js";
 
 export async function attach(job, payload, context) {
   if (job.kind === "attach-video")
@@ -31,7 +32,7 @@ export async function attach(job, payload, context) {
     if (db.prepare("SELECT id FROM queue WHERE song_id=?").get(song.id))
       throw fail(409, "请先移出播放队列");
     const { file } = await withBiliCookie(
-      get("favorites", {}).cookie,
+      biliCookie(store),
       dir,
       (file) => downloadVideo(payload.url, downloads, file),
     );

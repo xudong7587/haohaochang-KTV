@@ -10,6 +10,7 @@ import {
 import { withSongWrite, currentSong } from "./song-writes.js";
 import { safeMedia, inside } from "./media-utils.js";
 import { savePosterImage } from "./poster-image.js";
+import { biliCookie } from "./bili-credentials.js";
 
 export const posterName = "封面.jpg";
 export const posterSearchVersion = 2;
@@ -98,7 +99,7 @@ export async function scrapePoster(
               store.get("video-source:" + id)?.url ||
               store.get("download-quality:" + id)?.sourceUrl ||
               "",
-            cookie: store.get("favorites", {}).cookie || "",
+            cookie: biliCookie(store),
           });
           let bytes;
           try {

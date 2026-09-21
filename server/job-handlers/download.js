@@ -8,6 +8,7 @@ import { downloadVideo } from "../media.js";
 import { downloadBiliTracks } from "../bili-download.js";
 import { encodeResource } from "../song-package.js";
 import { taskProgress } from "../task-progress.js";
+import { biliCookie } from "../bili-credentials.js";
 
 export async function download(job, payload, context) {
   const {
@@ -36,7 +37,7 @@ export async function download(job, payload, context) {
       ? await downloadBiliTracks(
           payload.url,
           path.join(workspace, "dash"),
-          get("favorites", {}).cookie,
+          biliCookie(store),
           payload.quality,
           payload.expectedHeight,
           {
@@ -44,7 +45,7 @@ export async function download(job, payload, context) {
               taskProgress(store, job.id, { label, percent }),
           },
         )
-      : await withBiliCookie(get("favorites", {}).cookie, dir, (file) =>
+      : await withBiliCookie(biliCookie(store), dir, (file) =>
           downloadVideo(payload.url, workspace, file, payload.quality),
         );
     taskProgress(store, job.id, null);

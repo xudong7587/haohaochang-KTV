@@ -5,6 +5,10 @@ export function BiliLogin({
   onLogin,
   canLogin = true,
   compact = false,
+  scope = "online",
+  title = "B 站登录与高清下载",
+  description = "",
+  refreshKey,
 }) {
   const [account, setAccount] = useState(null),
     [qr, setQr] = useState(null),
@@ -14,7 +18,9 @@ export function BiliLogin({
     try {
       setAccount(
         await request(
-          canLogin ? "/admin/bilibili/status" : "/online/bilibili/status",
+          canLogin
+            ? "/admin/bilibili/status?scope=" + scope
+            : "/online/bilibili/status",
         ),
       );
     } catch (e) {
@@ -23,7 +29,7 @@ export function BiliLogin({
   }
   useEffect(() => {
     check();
-  }, []);
+  }, [refreshKey]);
   useEffect(() => {
     if (!qr) return;
     let stopped = false,
@@ -60,7 +66,7 @@ export function BiliLogin({
   }, [qr]);
   return (
     <div className="settings-card">
-      {!compact && <h3>B 站登录与高清下载</h3>}
+      {!compact && <h3>{title}</h3>}
       <p>
         {account
           ? account.loggedIn
@@ -70,9 +76,8 @@ export function BiliLogin({
       </p>
       {!compact && (
         <p>
-          在线找歌与收藏夹共用登录。最高画质按账号权限和原视频下载，支持 480p
-          等老 MV，不设最低 720p
-          限制。部分超清画质需要大会员，原视频也需要提供该画质。
+          {description ||
+            "在线找歌、预览和在线下载使用此账号；收藏夹自动下载另有独立登录，互不影响。最高画质按账号权限和原视频下载，支持 480p 等老 MV，不设最低 720p 限制。部分超清画质需要大会员，原视频也需要提供该画质。"}
         </p>
       )}
       {canLogin && account?.loggedIn && (
@@ -93,7 +98,11 @@ export function BiliLogin({
             onClick={async () => {
               setBusy(true);
               try {
-                const result = await request("/admin/bilibili/qr", {}, "POST");
+                const result = await request(
+                  "/admin/bilibili/qr",
+                  { scope },
+                  "POST",
+                );
                 setQr({
                   ...result,
                   expires: Date.now() + result.expiresIn * 1000,

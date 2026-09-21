@@ -28,6 +28,7 @@ import {
 } from "../shared/catalog.js";
 import { findLyrics } from "./lyrics-source.js";
 import { searchText, safeMedia, inside } from "./media-utils.js";
+import { biliCookie } from "./bili-credentials.js";
 import { filesUnder, importKey, metadata } from "./library.js";
 import { enrichSong } from "./enrichment.js";
 import { hdUpgradeSource } from "./split-video.js";
@@ -197,7 +198,7 @@ export function libraryApi({
     if (req.body.url) {
       const source = await sourceMetadata(
         req.body.url,
-        get("favorites", {}).cookie,
+        biliCookie(store),
       );
       result = {
         ...identifyVideo(source),
@@ -311,7 +312,7 @@ export function libraryApi({
   app.post("/api/admin/source-info", admin, async (req, res) => {
     let candidate = await previewSourceCandidate(
       req.body.url,
-      get("favorites", {}).cookie,
+      biliCookie(store),
     );
     if (candidate.identity.needs_review && get("enrichment", {}).enabled) {
       const parsed = await enrichSong(get("enrichment"), {
@@ -579,7 +580,7 @@ export function libraryApi({
     } else
       candidate = await previewSourceCandidate(
         url,
-        get("favorites", {}).cookie,
+        biliCookie(store),
       );
     res.json({
       id: addJob("download", {

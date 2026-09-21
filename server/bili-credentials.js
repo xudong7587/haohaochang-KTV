@@ -14,6 +14,33 @@ const names = {
   buvid3: "buvid3",
   dedeuserid: "DedeUserID",
 };
+// 在线找歌／下载和收藏夹自动下载各保存一份登录。B站刷新会轮换 refresh_token，
+// 同一份凭证被两处同时维护时，一端轮换就会让另一端失效，因此两处必须独立。
+const scopes = {
+  online: {
+    record: "bili-online",
+    state: "bili-online-refresh-state",
+    confirm: "bili-online-refresh-confirm",
+  },
+  favorites: {
+    record: "favorites",
+    state: "bili-refresh-state",
+    confirm: "bili-refresh-confirm",
+  },
+};
+export const biliScopes = Object.keys(scopes);
+export function biliScope(scope = "online") {
+  const target = scopes[scope];
+  if (!target) throw new Error("未知的 B 站登录用途");
+  return target;
+}
+export function biliCookie(store, scope = "online") {
+  return store.get(biliScope(scope).record, {}).cookie || "";
+}
+export function saveBiliLogin(store, scope, { cookie, credentials }) {
+  const { record } = biliScope(scope);
+  store.set(record, { ...store.get(record, {}), cookie, credentials });
+}
 const pending = new WeakMap();
 const fingerprint = (cookie) =>
   createHash("sha256").update(cookie).digest("hex");
@@ -60,42 +87,46 @@ async function json(response) {
 
 export async function ensureBiliCredentials(
   store,
-  { fetcher = fetch, now = Date.now, force = false } = {},
+  { fetcher = fetch, now = Date.now, force = false, scope = "online" } = {},
 ) {
-  if (store.readOnlyMedia) return store.get("favorites", {}).cookie || "";
-  if (pending.has(store)) return pending.get(store);
-  const operation = maintain(store, { fetcher, now, force });
-  pending.set(store, operation);
+  biliScope(scope);
+  if (store.readOnlyMedia) return biliCookie(store, scope);
+  const operations = pending.get(store) || new Map();
+  pending.set(store, operations);
+  if (operations.has(scope)) return operations.get(scope);
+  const operation = maintain(store, { fetcher, now, force, scope });
+  operations.set(scope, operation);
   try {
     return await operation;
   } finally {
-    pending.delete(store);
+    operations.delete(scope);
   }
 }
 
-async function maintain(store, { fetcher, now, force }) {
-  const config = store.get("favorites", {}),
+async function maintain(store, { fetcher, now, force, scope }) {
+  const target = biliScope(scope),
+    config = store.get(target.record, {}),
     cookie = config.cookie || "";
   if (!cookie) return "";
   const refreshToken = config.credentials?.ac_time_value || "";
   if (!refreshToken) return cookie; // Legacy/raw cookies remain usable; never invent a token.
   const hash = fingerprint(cookie),
-    previous = store.get("bili-refresh-state", {});
+    previous = store.get(target.state, {});
   if (!force && previous.cookieHash === hash && previous.nextCheck > now())
     return cookie;
-  const current = () => store.get("favorites", {});
+  const current = () => store.get(target.record, {});
   const unchanged = () =>
     current().cookie === cookie &&
     current().credentials?.ac_time_value === refreshToken;
   const state = (patch, currentCookie = cookie) =>
-    store.set("bili-refresh-state", {
+    store.set(target.state, {
       cookieHash: fingerprint(currentCookie),
       checkedAt: now(),
       nextCheck: now() + 24 * 3600000,
       ...patch,
     });
   try {
-    const waiting = store.get("bili-refresh-confirm", null);
+    const waiting = store.get(target.confirm, null);
     if (waiting?.cookieHash === hash) {
       await json(
         await request(passport + "confirm/refresh", cookie, fetcher, {
@@ -104,7 +135,7 @@ async function maintain(store, { fetcher, now, force }) {
         }),
       );
       if (!unchanged()) return current().cookie || "";
-      store.set("bili-refresh-confirm", null);
+      store.set(target.confirm, null);
     }
     const info = await json(
       await request(passport + "cookie/info", cookie, fetcher),
@@ -175,12 +206,12 @@ async function maintain(store, { fetcher, now, force }) {
       ...Object.entries(names).map(([key, name]) => `${name}=${updates[key]}`),
     ].join("; ");
     // Persist the new usable credentials before invalidating the old refresh token.
-    store.set("favorites", {
+    store.set(target.record, {
       ...current(),
       cookie: nextCookie,
       credentials: updates,
     });
-    store.set("bili-refresh-confirm", {
+    store.set(target.confirm, {
       cookieHash: fingerprint(nextCookie),
       oldToken: refreshToken,
     });
@@ -192,7 +223,7 @@ async function maintain(store, { fetcher, now, force }) {
         }),
       );
       if (current().cookie === nextCookie) {
-        store.set("bili-refresh-confirm", null);
+        store.set(target.confirm, null);
         state({ status: "refreshed", refreshedAt: now() }, nextCookie);
       }
     } catch {
@@ -211,9 +242,10 @@ async function maintain(store, { fetcher, now, force }) {
   }
 }
 
-export function biliCredentialStatus(store) {
-  const config = store.get("favorites", {}),
-    saved = store.get("bili-refresh-state", {});
+export function biliCredentialStatus(store, scope = "online") {
+  const target = biliScope(scope),
+    config = store.get(target.record, {}),
+    saved = store.get(target.state, {});
   const relevant = saved.cookieHash === fingerprint(config.cookie || "");
   return {
     autoRefresh: !!config.credentials?.ac_time_value,

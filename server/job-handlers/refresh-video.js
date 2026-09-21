@@ -22,6 +22,7 @@ import {
   checkRevision,
 } from "../song-writes.js";
 import { resourceManifest } from "../resource-manifest.js";
+import { biliCookie } from "../bili-credentials.js";
 
 export async function refreshVideo(job, payload, context) {
   const { store, cache, downloads } = context;
@@ -58,7 +59,7 @@ export async function refreshVideo(job, payload, context) {
   const downloaded = await (context.downloadRecording || downloadBiliTracks)(
     plan.url,
     taskRoot,
-    store.get("favorites", {}).cookie,
+    biliCookie(store),
     payload.quality || "highest",
     payload.expectedHeight || 0,
   );

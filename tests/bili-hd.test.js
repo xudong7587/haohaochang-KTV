@@ -260,6 +260,13 @@ test("QR login accepts current official account domain and stores credentials on
       {
         favoriteId: "123",
         enabled: true,
+        cookie: "SESSDATA=favorite-account",
+        credentials: { sessdata: "old" },
+      },
+    ],
+    [
+      "bili-online",
+      {
         cookie: "old-expired",
         credentials: { sessdata: "old" },
       },
@@ -329,10 +336,17 @@ test("QR login accepts current official account domain and stores credentials on
     server.closeAllConnections();
     await new Promise((r) => server.close(r));
   });
-  const request = async (url) =>
+  const request = async (url, body) =>
     fetch(
       `http://127.0.0.1:${server.address().port}/api/admin/bilibili` + url,
-      { method: "POST", headers: { Authorization: "Bearer test" } },
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer test",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body || {}),
+      },
     );
   assert.equal(
     (
@@ -348,19 +362,36 @@ test("QR login accepts current official account domain and stores credentials on
   assert.equal(qr.qrcode_key, undefined);
   const pending = await (await request("/qr/" + qr.id)).json();
   assert.equal(pending.status, "pending");
-  assert.equal(store.get("favorites").cookie, "old-expired");
+  assert.equal(store.get("bili-online").cookie, "old-expired");
+  assert.equal(store.get("favorites").cookie, "SESSDATA=favorite-account");
   const fresh = await (await request("/qr")).json();
   code = 0;
   const success = await (await request("/qr/" + fresh.id)).json();
   assert.equal(success.status, "success");
   assert.equal(success.cookie, undefined);
-  const saved = store.get("favorites");
+  assert.equal(success.scope, "online");
+  const saved = store.get("bili-online");
   assert.match(saved.cookie, /SESSDATA=new-fixture/);
-  assert.equal(saved.favoriteId, "123");
-  assert.equal(saved.enabled, true);
   assert.equal(saved.credentials.sessdata, "new-fixture");
   assert.equal(saved.credentials.ac_time_value, "qr-refresh-fixture");
   assert.equal(success.credentials, undefined);
+  // 在线扫码不触碰收藏夹登录，收藏夹保存的账号和设置保持不变。
+  assert.equal(store.get("favorites").cookie, "SESSDATA=favorite-account");
+  assert.equal(store.get("favorites").favoriteId, "123");
+  assert.equal(store.get("favorites").enabled, true);
+  // 收藏夹侧扫码只更新收藏夹登录。
+  const favoriteScan = await (
+    await request("/qr?scope=favorites", { scope: "favorites" })
+  ).json();
+  assert.equal(favoriteScan.scope, "favorites");
+  const favoriteSuccess = await (
+    await request("/qr/" + favoriteScan.id)
+  ).json();
+  assert.equal(favoriteSuccess.status, "success");
+  assert.match(store.get("favorites").cookie, /SESSDATA=new-fixture/);
+  assert.equal(store.get("favorites").favoriteId, "123");
+  assert.equal(store.get("favorites").enabled, true);
+  assert.match(store.get("bili-online").cookie, /SESSDATA=new-fixture/);
   assert.deepEqual(
     await biliLoginStatus("expired", async () => json({ code: -101 })),
     { loggedIn: false },

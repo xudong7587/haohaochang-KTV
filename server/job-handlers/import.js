@@ -13,6 +13,7 @@ import { metadata, importMedia, importKey } from "../library.js";
 import { downloadVideo, prepareSong } from "../media.js";
 import { separateSong } from "../separation.js";
 import { upgradeSplitVideo } from "../split-video.js";
+import { biliCookie } from "../bili-credentials.js";
 
 export async function importJob(job, payload, context) {
   const {
@@ -35,7 +36,7 @@ export async function importJob(job, payload, context) {
       const originalFile = payload.file,
         originalInfo = await stat(originalFile);
       const replacement = await withBiliCookie(
-        get("favorites", {}).cookie,
+        biliCookie(store),
         dir,
         (cookieFile) =>
           downloadVideo(payload.replacementUrl, downloads, cookieFile),
@@ -75,7 +76,7 @@ export async function importJob(job, payload, context) {
         try {
           const info = await sourceMetadata(
             "https://www.bilibili.com/video/" + bv[1] + "?p=" + Number(bv[2]),
-            get("favorites", {}).cookie,
+            biliCookie(store),
           );
           videoTitle = info.title;
         } catch {}

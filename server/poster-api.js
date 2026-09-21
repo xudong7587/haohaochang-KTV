@@ -6,6 +6,7 @@ import {
 } from "./song-writes.js";
 import { posterName, scrapePoster } from "./song-poster.js";
 import { bilibiliProvider } from "./providers/bilibili.js";
+import { biliCookie } from "./bili-credentials.js";
 import {
   allowedPosterUrl,
   downloadPoster,
@@ -42,7 +43,7 @@ export function posterApi({
     const page = Math.max(1, Math.min(10, Number(req.query.page) || 1));
     const rows = await (posterOptions.search || bilibiliProvider.search)(
       query,
-      store.get("favorites", {}).cookie || "",
+      biliCookie(store),
       undefined,
       page,
     );

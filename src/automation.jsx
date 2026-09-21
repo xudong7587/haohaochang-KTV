@@ -4,6 +4,7 @@ export function Automation({ request, notify, section }) {
   const [ai, setAI] = useState(null),
     [favorite, setFavorite] = useState(null),
     [reviews, setReviews] = useState([]),
+    [favoriteLogin, setFavoriteLogin] = useState(0),
     [token, setToken] = useState(""),
     [busy, setBusy] = useState(false);
   const refresh = () =>
@@ -38,11 +39,9 @@ export function Automation({ request, notify, section }) {
         <BiliLogin
           request={request}
           notify={notify}
-          onLogin={() =>
-            request("/admin/favorites")
-              .then(setFavorite)
-              .catch((e) => notify(e.message))
-          }
+          scope="online"
+          title="在线找歌 · B 站登录"
+          description="在线搜索、预览和在线下载使用此账号。收藏夹自动下载保存另一份登录，两者分别刷新，互不影响。最高画质按账号权限和原视频下载，支持 480p 等老 MV，不设最低 720p 限制；部分超清画质需要大会员。"
         />
       )}
       {favorite && (!section || section === "online") && (
@@ -50,18 +49,20 @@ export function Automation({ request, notify, section }) {
           className="settings-card"
           onSubmit={async (e) => {
             e.preventDefault();
-            if (await save("/admin/favorites", favorite))
+            if (await save("/admin/favorites", favorite)) {
+              setFavoriteLogin((n) => n + 1);
               setFavorite((c) => ({
                 ...c,
                 hasCookie: !!c.cookie || c.hasCookie,
                 cookie: "",
               }));
+            }
           }}
         >
           <h3>B 站收藏夹自动下载</h3>
           <p>
             这里保存的 Cookie
-            也供在线找歌使用。在线搜索默认启用；不必开启收藏夹自动下载。
+            只用于收藏夹同步和下载，与在线找歌的登录相互独立。在线搜索默认启用；不必开启收藏夹自动下载。
           </p>
           <p>
             直接监控收藏夹，无需另装
@@ -159,6 +160,22 @@ export function Automation({ request, notify, section }) {
             </button>
           </div>
         </form>
+      )}
+      {favorite && (!section || section === "online") && (
+        <BiliLogin
+          request={request}
+          notify={notify}
+          scope="favorites"
+          title="收藏夹自动下载 · B 站登录"
+          description="用收藏夹所属账号扫码登录；同步和下载使用这份登录，与在线找歌分别保存、分别刷新。收藏夹属于其他账号或公开可见时，也可以只填写上面的 Cookie 或凭证字段。"
+          refreshKey={favoriteLogin}
+          onLogin={() => {
+            setFavoriteLogin((n) => n + 1);
+            request("/admin/favorites")
+              .then(setFavorite)
+              .catch((e) => notify(e.message));
+          }}
+        />
       )}
       {ai && (!section || section === "metadata") && (
         <form

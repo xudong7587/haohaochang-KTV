@@ -76,7 +76,12 @@ export async function runJob(job, payload, context) {
       "organize",
     ].includes(job.kind)
   )
-    await ensureBiliCredentials(context.store);
+    // 在线下载用在线登录，收藏夹下载用收藏夹登录；两份登录各自维护，互不覆盖。
+    await Promise.all(
+      ["online", "favorites"].map((scope) =>
+        ensureBiliCredentials(context.store, { scope }),
+      ),
+    );
   if (payload.id)
     await migrateSongAssets(payload.id, context.legacyCache, context.cache);
   const handler = handlers[job.kind];

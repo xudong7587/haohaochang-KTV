@@ -4,12 +4,14 @@ import {
   ensureBiliCredentials,
   credentialsFromCookie,
   biliCredentialStatus,
+  biliCookie,
 } from "../server/bili-credentials.js";
 import { favoriteConfig } from "../server/favorites.js";
 import { requireDownloadFrameRate } from "../server/bili-download.js";
 
 const oldCookie =
   "SESSDATA=old; bili_jct=old-csrf; DedeUserID=1; buvid3=device; extra=keep";
+const onlineCookie = "SESSDATA=online; bili_jct=online-csrf; DedeUserID=2";
 function fixture() {
   const data = new Map([
     [
@@ -19,6 +21,13 @@ function fixture() {
         enabled: true,
         favoriteId: "123",
         credentials: credentialsFromCookie(oldCookie, "refresh-old"),
+      },
+    ],
+    [
+      "bili-online",
+      {
+        cookie: onlineCookie,
+        credentials: credentialsFromCookie(onlineCookie, "refresh-online"),
       },
     ],
   ]);
@@ -67,8 +76,8 @@ test("refresh persists credentials, confirms with new CSRF, coalesces requests a
     return response({ code: 0 });
   };
   const values = await Promise.all([
-    ensureBiliCredentials(store, { fetcher }),
-    ensureBiliCredentials(store, { fetcher }),
+    ensureBiliCredentials(store, { fetcher, scope: "favorites" }),
+    ensureBiliCredentials(store, { fetcher, scope: "favorites" }),
   ]);
   assert.equal(values[0], values[1]);
   assert.equal(calls.length, 4);
@@ -76,12 +85,59 @@ test("refresh persists credentials, confirms with new CSRF, coalesces requests a
   assert.match(values[0], /buvid3=device/);
   assert.equal(store.get("favorites").credentials.ac_time_value, "refresh-new");
   assert.equal(store.get("favorites").favoriteId, "123");
-  await ensureBiliCredentials(store, { fetcher });
+  await ensureBiliCredentials(store, { fetcher, scope: "favorites" });
   assert.equal(calls.length, 4);
-  assert.equal(biliCredentialStatus(store).refreshStatus, "refreshed");
+  assert.equal(
+    biliCredentialStatus(store, "favorites").refreshStatus,
+    "refreshed",
+  );
   assert.doesNotMatch(
-    JSON.stringify(biliCredentialStatus(store)),
+    JSON.stringify(biliCredentialStatus(store, "favorites")),
     /refresh-new|refresh-old|SESSDATA/,
+  );
+});
+
+test("online login and favorite login refresh independently and never overwrite each other", async () => {
+  const store = fixture();
+  const fetcher = async (url, options) => {
+    if (String(url).endsWith("cookie/info"))
+      return response({ code: 0, data: { refresh: true } });
+    if (String(url).includes("/correspond/"))
+      return new Response('<div id="1-name">csrf</div>');
+    if (String(url).endsWith("cookie/refresh")) {
+      const token = options.body.get("refresh_token"),
+        suffix = token === "refresh-old" ? "favorite" : "online";
+      return response({ code: 0, data: { refresh_token: "new-" + suffix } }, [
+        "SESSDATA=" + suffix,
+        "bili_jct=" + suffix + "-csrf",
+        "DedeUserID=1",
+        "buvid3=" + suffix + "-device",
+      ]);
+    }
+    return response({ code: 0 });
+  };
+  const [online, favorites] = await Promise.all([
+    ensureBiliCredentials(store, { fetcher, scope: "online" }),
+    ensureBiliCredentials(store, { fetcher, scope: "favorites" }),
+  ]);
+  assert.match(online, /SESSDATA=online/);
+  assert.match(favorites, /SESSDATA=favorite/);
+  assert.equal(store.get("bili-online").credentials.ac_time_value, "new-online");
+  assert.equal(
+    store.get("favorites").credentials.ac_time_value,
+    "new-favorite",
+  );
+  assert.equal(store.get("bili-online").favoriteId, undefined);
+  assert.equal(store.get("favorites").favoriteId, "123");
+  assert.equal(biliCookie(store), online);
+  assert.equal(biliCookie(store, "favorites"), favorites);
+  assert.equal(
+    biliCredentialStatus(store, "online").refreshStatus,
+    "refreshed",
+  );
+  assert.equal(
+    biliCredentialStatus(store, "favorites").refreshStatus,
+    "refreshed",
   );
 });
 
@@ -92,10 +148,16 @@ test("maintenance failure preserves usable cookie with retry cooldown; raw-cooki
     calls++;
     throw new Error("offline");
   };
-  assert.equal(await ensureBiliCredentials(store, { fetcher }), oldCookie);
-  await ensureBiliCredentials(store, { fetcher });
+  assert.equal(
+    await ensureBiliCredentials(store, { fetcher, scope: "favorites" }),
+    oldCookie,
+  );
+  await ensureBiliCredentials(store, { fetcher, scope: "favorites" });
   assert.equal(calls, 1);
-  assert.equal(biliCredentialStatus(store).refreshStatus, "retrying");
+  assert.equal(
+    biliCredentialStatus(store, "favorites").refreshStatus,
+    "retrying",
+  );
   const updated = favoriteConfig(
     { cookie: "SESSDATA=another", favoriteId: "123" },
     store.get("favorites"),
@@ -114,7 +176,7 @@ test("manual credential replacement during refresh wins over a delayed response"
     return response({ code: 0, data: { refresh: true } });
   };
   assert.equal(
-    await ensureBiliCredentials(store, { fetcher }),
+    await ensureBiliCredentials(store, { fetcher, scope: "favorites" }),
     "SESSDATA=manual",
   );
   assert.equal(store.get("bili-refresh-state", null), null);
@@ -140,10 +202,16 @@ test("failed confirmation retains new credentials and resumes after restart with
     if (++confirmations === 1) throw new Error("network");
     return response({ code: 0 });
   };
-  await ensureBiliCredentials(store, { fetcher });
-  assert.equal(biliCredentialStatus(store).refreshStatus, "confirm-pending");
+  await ensureBiliCredentials(store, { fetcher, scope: "favorites" });
+  assert.equal(
+    biliCredentialStatus(store, "favorites").refreshStatus,
+    "confirm-pending",
+  );
   assert.match(store.get("favorites").cookie, /SESSDATA=new/);
-  await ensureBiliCredentials({ ...store }, { fetcher, force: true });
+  await ensureBiliCredentials(
+    { ...store },
+    { fetcher, force: true, scope: "favorites" },
+  );
   assert.equal(refreshes, 1);
   assert.equal(confirmations, 2);
   assert.equal(store.get("bili-refresh-confirm"), null);
