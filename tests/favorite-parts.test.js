@@ -20,6 +20,10 @@ import {
   intakeKey,
   nfoIdentity,
 } from "../server/local-intake.js";
+import { run } from "../server/process.js";
+import { probe } from "../server/media-utils.js";
+import ffmpeg from "ffmpeg-static";
+import ffprobe from "ffprobe-static";
 const bvid = "BV1234567890";
 const response = (data) => Response.json({ code: 0, data });
 const pages = [
@@ -116,12 +120,18 @@ test("download resolves reordered CID, writes each NFO, and waits for the rest o
         { ...pages[0], page: 2 },
       ],
     });
-  f.favoriteDownload = async (url, directory) => {
+  f.favoriteTracks = async (url, directory, cookie, quality) => {
     assert.match(url, /\?p=1$/);
-    const file = path.join(directory, "download.mp4");
+    assert.equal(quality, "highest");
+    await mkdir(directory, { recursive: true });
+    const file = path.join(directory, "audio.m4a"),
+      videoFile = path.join(directory, "video.mp4");
     await writeFile(file, "independent part recording");
-    return { file };
+    await writeFile(videoFile, "independent part picture");
+    return { file, videoFile };
   };
+  f.favoriteMux = async (_tracks, target) =>
+    writeFile(target, "muxed part recording");
   const payload = { bvid, cid: "102", page: 2 },
     id = f.addJob("favorite-download", payload);
   await favorite_download({ id }, payload, f);
@@ -152,4 +162,58 @@ test("download resolves reordered CID, writes each NFO, and waits for the rest o
     favoriteNfo({ ...payload, title: "A & B <C>", collectionTitle: "D" }),
     /A &amp; B &lt;C&gt;/,
   );
+});
+
+test("favorite downloads mux the API picture and original track into one playable file", async (t) => {
+  process.env.FFMPEG = ffmpeg;
+  process.env.FFPROBE = ffprobe.path;
+  const f = await fixture(t);
+  f.set("favorites", { favoriteId: "123" });
+  f.favoriteFetch = async () =>
+    response({ title: "歌手《专辑》", pages: [pages[0]] });
+  const video = path.join(f.downloads, "track-video.mp4"),
+    audio = path.join(f.downloads, "track-audio.m4a");
+  await run(ffmpeg, [
+    "-v",
+    "error",
+    "-f",
+    "lavfi",
+    "-i",
+    "color=c=blue:s=64x64:d=0.6",
+    "-c:v",
+    "libx264",
+    "-pix_fmt",
+    "yuv420p",
+    video,
+  ]);
+  await run(ffmpeg, [
+    "-v",
+    "error",
+    "-f",
+    "lavfi",
+    "-i",
+    "sine=frequency=440:duration=0.6",
+    "-ac",
+    "2",
+    "-c:a",
+    "aac",
+    audio,
+  ]);
+  f.favoriteTracks = async (url, directory, cookie, quality) => {
+    assert.match(url, /\?p=1$/);
+    assert.equal(quality, "highest");
+    assert.equal(cookie, undefined);
+    await mkdir(directory, { recursive: true });
+    return { file: audio, videoFile: video };
+  };
+  const payload = { bvid, cid: "101", page: 1 },
+    id = f.addJob("favorite-download", payload);
+  await favorite_download({ id }, payload, f);
+  const saved = favoriteBundles(f.store)[0].parts.find(
+    (p) => p.cid === "101",
+  ).file;
+  assert.match(saved, /Season 1/);
+  const info = await probe(saved);
+  assert.equal(info.hasVideo, true, "收藏夹文件保留独立画面");
+  assert.equal(info.audio.length > 0, true, "收藏夹文件保留原唱音轨");
 });

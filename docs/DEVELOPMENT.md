@@ -93,7 +93,7 @@ B站预览优先使用播放器提供的 AVC/AAC DASH 流，yt-dlp 为后备；�
 
 ## v0.3.6 在线高清链路
 
-`server/bili-login.js` 管理二维码临时会话与共享登录，`providers/bili-wbi.js` 实现签名，`bili-download.js` 按当前账号选择独立DASH并验证真实媒体。设计参考 [bili-sync取流代码](https://github.com/amtoaer/bili-sync/blob/master/crates/bili_sync/src/bilibili/video.rs) 与 [扫码实现](https://github.com/amtoaer/bili-sync/blob/master/crates/bili_sync/src/bilibili/credential.rs)。未直接依赖或调用bili-sync进程；其他遗留下载用途仍使用yt-dlp。
+`server/bili-login.js` 管理二维码临时会话与共享登录，`providers/bili-wbi.js` 实现签名，`bili-download.js` 按当前账号选择独立DASH并验证真实媒体。设计参考 [bili-sync取流代码](https://github.com/amtoaer/bili-sync/blob/master/crates/bili_sync/src/bilibili/video.rs) 与 [扫码实现](https://github.com/amtoaer/bili-sync/blob/master/crates/bili_sync/src/bilibili/credential.rs)。未直接依赖或调用bili-sync进程。B站来源（在线下载、更新画质、收藏夹下载）统一走这条 API 取流；`favorite-download` 再把独立画面与原唱合成为一个文件。yt-dlp 只保留给 B站以外的来源（YouTube 等）与旧链接替换，平台改版时优先修 API 路径。
 
 在线缓存位于 `.ktv-online/dash`，分辨率与凭证隔离；原始音频成为歌曲来源，独立画面通过 `split-video:<id>` 保留。版本回收保护这类来源引用。`upgrade-hd`只接受已记录的在线来源与裁剪区间，不自动覆盖已有音轨。PC裁剪仍使用已有 `video_only` 协议，新增可选 `vocal_activity` 字段不改变旧分离适配器兼容性。
 

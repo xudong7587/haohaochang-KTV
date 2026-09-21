@@ -1,6 +1,6 @@
-# NAS 安装与升级 · v1.1.2
+# NAS 安装与升级 · v1.1.3
 
-本版把 B 站登录收回为一处：在线找歌和收藏夹同步共用同一份 Cookie，扫码一次即可，只更新主镜像。主程序、CPU 分离和 Intel NPU 分离仍是独立容器，主程序保留 Python、FFmpeg、图片处理和下载工具；CPU／NPU 沿用固定的 1.0.8 镜像，并锁定 SHA-256 摘要；以后日常更新只更换主程序。
+本版把收藏夹下载改为应用自己的 B 站取流，不再依赖网页解析，只更新主镜像。主程序、CPU 分离和 Intel NPU 分离仍是独立容器，主程序保留 Python、FFmpeg、图片处理和下载工具；CPU／NPU 沿用固定的 1.0.8 镜像，并锁定 SHA-256 摘要；以后日常更新只更换主程序。
 
 ## 选择配置
 
@@ -47,7 +47,7 @@ docker compose -f docker-compose.arm64.yaml up -d
 
 ## 首次安装
 
-从本版 Release 下载 `haohaochang-nas-v1.1.2.zip`。设置至少 12 位的管理密码，确认 `/data`、`/media`、`/download` 的映射后，按上面的命令启动。打开 `http://NAS-IP:端口/admin` 登录。
+从本版 Release 下载 `haohaochang-nas-v1.1.3.zip`。设置至少 12 位的管理密码，确认 `/data`、`/media`、`/download` 的映射后，按上面的命令启动。打开 `http://NAS-IP:端口/admin` 登录。
 
 三个容器均使用 host 网络，保留 PC 和 TV 自动发现；CPU／NPU 只监听本机 `127.0.0.1:18002`／`18001`。无需创建 Docker bridge 子网，也无需在路由器或防火墙开放分离端口。
 
@@ -72,4 +72,4 @@ ARM64 在两条命令的 `compose` 后都加上 `-f docker-compose.arm64.yaml`�
 
 模型优先复用 `data/separator/models`，否则使用 `data/models`；NPU 缓存优先复用 `data/npu/npu-cache`，否则使用 `data/npu-cache`。v1.0.7／v1.0.8 的任务继续使用 `data/separation/demucs` 和 `data/separation/openvino-npu`，不删除旧数据。
 
-网页歌手卡片随 NAS 更新。v1.1.2 只改 NAS 端，APK 与 1.1.0.1 功能相同；全新安装可用 `haohaochang-tv-v1.1.2.apk`，同签名覆盖保留登录。现有 PC 整理器仍兼容；新安装可用 `haohaochang-resource-ai-v1.1.2.zip`。
+网页歌手卡片随 NAS 更新。v1.1.3 只改 NAS 端，APK 与 1.1.0.1 功能相同；全新安装可用 `haohaochang-tv-v1.1.3.apk`，同签名覆盖保留登录。现有 PC 整理器仍兼容；新安装可用 `haohaochang-resource-ai-v1.1.3.zip`。

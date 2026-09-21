@@ -1,11 +1,4 @@
 import React, { useEffect, useState } from "react";
-const credentialFields = [
-  ["sessdata", "SESSDATA"],
-  ["bili_jct", "bili_jct"],
-  ["buvid3", "buvid3"],
-  ["dedeuserid", "DedeUserID"],
-  ["ac_time_value", "ac_time_value"],
-];
 export function BiliLogin({
   request,
   notify,
@@ -19,8 +12,7 @@ export function BiliLogin({
   const [account, setAccount] = useState(null),
     [qr, setQr] = useState(null),
     [message, setMessage] = useState(""),
-    [busy, setBusy] = useState(false),
-    [manual, setManual] = useState({});
+    [busy, setBusy] = useState(false);
   async function check() {
     try {
       setAccount(
@@ -30,20 +22,6 @@ export function BiliLogin({
       );
     } catch (e) {
       setMessage(e.message);
-    }
-  }
-  async function saveCredentials(value) {
-    setBusy(true);
-    try {
-      await request("/admin/bilibili/credentials", value, "POST");
-      setManual({});
-      setMessage(value.clearCookie ? "已清除登录凭证" : "凭证已保存");
-      await check();
-      onLogin?.();
-    } catch (e) {
-      notify(e.message);
-    } finally {
-      setBusy(false);
     }
   }
   useEffect(() => {
@@ -90,7 +68,7 @@ export function BiliLogin({
         {account
           ? account.loggedIn
             ? `已登录：${account.name}${account.vip ? " · 大会员" : " · 普通账号"}`
-            : "未登录或登录已过期，请扫码或填写下方凭证。"
+            : "未登录或登录已过期，请用哔哩哔哩 App 扫码登录。"
           : "正在检测已保存的登录凭证…"}
       </p>
       {!compact && (
@@ -143,61 +121,6 @@ export function BiliLogin({
         <img src={qr.image} width="220" height="220" alt="B站登录二维码" />
       )}
       {message && <p role="status">{message}</p>}
-      {canLogin && (
-        <details>
-          <summary>
-            手动填写 bili-sync 凭证
-            {account?.hasCookie === false ? "（当前未保存）" : ""}
-          </summary>
-          <p>
-            可以逐项粘贴 bili-sync 的字段，也可以把一整条 Cookie
-            粘在最后。留空的字段保留已保存的值；ac_time_value 现在不必须，留空只影响自动维护。
-          </p>
-          {credentialFields.map(([key, label]) => (
-            <label key={key}>
-              {label}
-              <input
-                type="password"
-                autoComplete="new-password"
-                value={manual[key] || ""}
-                placeholder="留空保留已保存的值"
-                onChange={(e) =>
-                  setManual({ ...manual, [key]: e.target.value })
-                }
-              />
-            </label>
-          ))}
-          <label>
-            Cookie（可整条粘贴，优先于上面的字段）
-            <input
-              type="password"
-              autoComplete="new-password"
-              value={manual.cookie || ""}
-              placeholder="SESSDATA=…; bili_jct=…; DedeUserID=…"
-              onChange={(e) =>
-                setManual({ ...manual, cookie: e.target.value })
-              }
-            />
-          </label>
-          <div className="actions">
-            <button
-              type="button"
-              className="primary"
-              disabled={busy}
-              onClick={() => saveCredentials(manual)}
-            >
-              保存凭证
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => saveCredentials({ ...manual, clearCookie: true })}
-            >
-              清除已保存凭证
-            </button>
-          </div>
-        </details>
-      )}
     </div>
   );
 }

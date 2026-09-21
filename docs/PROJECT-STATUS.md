@@ -1,4 +1,14 @@
-# 开发状态 · v1.1.2
+# 开发状态 · v1.1.3
+
+## 收藏夹下载改用应用取流
+
+用户反馈：收藏夹下载与重试持续失败，报“视频下载失败，请确认 B站登录 Cookie 和当前账号清晰度权限后重试”。现场排查（用户在 NAS web ssh 授权后）结论：账号 `哆啦呓语` 为大会员、yt-dlp 为 2026.08.19、用 B站 API 查询 4 个视频全部 `code 0` 正常；失败在 yt-dlp 抓取视频网页这一步——从 NAS 请求 `www.bilibili.com/video/...` 返回 `HTTP Error 404`、`KeyError('bvid')` 或 “may be deleted or geo-restricted”，连一小时前刚成功下载过的视频也同样失败，属于平台对网页请求的风控，与视频、凭证和清晰度权限无关。在线找歌不受影响，因为它走的是 API 取流。
+
+`favorite_download` 因此改为调用 `downloadBiliTracks`（与在线下载、更新画质同一套 `x/player/wbi/playurl` 取流与校验），再把独立画面与原唱用 `encodeResource` 合成一个 mp4 交给原有整理流程；`encodeResource` 的复制失败时回退重新编码，保证产出仍是可直接播放的文件。`context.favoriteTracks`／`context.favoriteMux` 作为测试替身保留，下载过程通过 `taskProgress` 上报“下载画面／下载原唱”百分比。yt-dlp 仍用于 B 站以外的来源（YouTube 链接等）。
+
+登录卡片（`src/bili-login.jsx`）只保留“扫码登录／检测登录状态”，删除手动填写 bili-sync 凭证的入口；`POST /api/admin/bilibili/credentials` 与 `biliLoginFromInput` 保留给脚本和旧接口使用。
+
+本地 Node 241 项中 240 通过、1 项 Linux 专属跳过；新增真实 FFmpeg 用例：用独立画面与原唱轨道跑完整收藏夹下载，确认入库文件同时保留画面与原唱音轨。生产前端构建与设置页浏览器检查通过。生产 NAS 尚未更新。
 
 ## B 站登录合并为一处
 
