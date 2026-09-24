@@ -2,6 +2,7 @@ package home.haohaochang.tv;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.BitmapFactory;
 import android.os.Build;
@@ -46,9 +47,7 @@ public final class MainActivity extends Activity {
   public void onCreate(Bundle state) {
     super.onCreate(state);
 
-    setRequestedOrientation(isTelevision()
-        ? android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        : android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR);
+    setRequestedOrientation(CarLinkLaunch.orientation(getIntent(), isTelevision()));
     if (Build.VERSION.SDK_INT >= 33)
       getOnBackInvokedDispatcher()
           .registerOnBackInvokedCallback(
@@ -495,6 +494,12 @@ public final class MainActivity extends Activity {
 
   @Override
   public boolean dispatchKeyEvent(KeyEvent event) {
+    if (BuildConfig.DEBUG && Build.VERSION.SDK_INT >= 30 && room != null && getDisplay() != null
+        && getDisplay().getDisplayId() != android.view.Display.DEFAULT_DISPLAY
+        && event.getKeyCode() == KeyEvent.KEYCODE_0) {
+      if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) handleBack();
+      return true;
+    }
     if (event.getAction() == KeyEvent.ACTION_DOWN && event.getKeyCode() == KeyEvent.KEYCODE_MENU) {
       if (event.getRepeatCount() == 0) menu();
       return true;
@@ -519,6 +524,13 @@ public final class MainActivity extends Activity {
     }
     exitPressedAt = now;
     Toast.makeText(this, "再按一次返回退出好好唱", Toast.LENGTH_SHORT).show();
+  }
+
+  @Override
+  protected void onNewIntent(Intent intent) {
+    super.onNewIntent(intent);
+    setIntent(intent);
+    setRequestedOrientation(CarLinkLaunch.orientation(intent, isTelevision()));
   }
 
   @Override

@@ -58,9 +58,11 @@ export function setAdminToken(value) {
 export function acceptLogin(value) {
   roomToken = value;
   localStorage.setItem("roomToken", value);
-  sessionStorage.setItem("adminToken", adminToken);
+  sessionStorage.removeItem("adminToken");
+  adminToken = "";
 }
-export function logout() {
+export async function logout() {
+  await fetch("/api/logout", { method: "POST" }).catch(() => {});
   sessionStorage.removeItem("controlRoomToken");
   sessionStorage.removeItem("playRoom");
   localStorage.removeItem("roomToken");

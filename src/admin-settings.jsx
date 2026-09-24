@@ -3,7 +3,7 @@ import { TaskActions } from "./task-actions.jsx";
 import React, { useState, useEffect, useRef } from "react";
 import { BackgroundSettings } from "./background-settings.jsx";
 import { HardDrive, Check, RefreshCw } from "lucide-react";
-import { api } from "./api.js";
+import { api, setAdminToken, acceptLogin } from "./api.js";
 import { LyricsSettings } from "./library-manager.jsx";
 import { Automation } from "./automation.jsx";
 import { Organize } from "./organize.jsx";
@@ -11,6 +11,8 @@ export function Settings({ admin, attempt, refresh }) {
   const [url, setUrl] = useState(admin.publicUrl),
     [online, setOnline] = useState(admin.onlineEnabled);
   const [section, setSection] = useState("tasks");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const refreshRef = useRef(refresh);
   refreshRef.current = refresh;
   useEffect(() => {
@@ -56,6 +58,7 @@ export function Settings({ admin, attempt, refresh }) {
           ["metadata", "资料与歌词"],
           ["display", "播放画面"],
           ["connection", "连接地址"],
+          ["security", "管理密码"],
         ].map(([id, label]) => (
           <button
             key={id}
@@ -67,6 +70,54 @@ export function Settings({ admin, attempt, refresh }) {
           </button>
         ))}
       </nav>
+      <div hidden={section !== "security"}>
+        <form
+          className="settings-card"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            if (newPassword.length < 6) return;
+            const changed = await attempt(() =>
+              api(
+                "/admin/password",
+                { currentPassword, newPassword },
+                "POST",
+                true,
+              ),
+            );
+            if (!changed) return;
+            setAdminToken(newPassword);
+            const login = await attempt(() => api("/login", {}, "POST", true));
+            if (login) acceptLogin(login.token);
+            setCurrentPassword("");
+            setNewPassword("");
+            if (login) attempt(() => Promise.resolve(), "管理密码已更新");
+          }}
+        >
+          <h3>修改管理密码</h3>
+          <label>
+            当前密码
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(event) => setCurrentPassword(event.target.value)}
+              required
+            />
+          </label>
+          <label>
+            新密码（至少 6 位）
+            <input
+              type="password"
+              autoComplete="new-password"
+              minLength={6}
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              required
+            />
+          </label>
+          <button className="primary">保存新密码</button>
+        </form>
+      </div>
       <div hidden={section !== "media"}>
         <section className="settings-card">
           <h3>NAS 媒体目录</h3>

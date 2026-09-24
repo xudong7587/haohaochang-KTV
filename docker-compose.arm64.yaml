@@ -9,7 +9,7 @@ services:
     image: ghcr.io/xudong7587/haohaochang:latest
     network_mode: host
     environment:
-      # 【必须修改】设置自己的管理密码，至少 12 位；升级时填回原密码。
+      # 【必须修改】设置自己的管理密码，至少 6 位；后台修改后这里保留初始密码即可。
       ADMIN_PASSWORD: "change-this-password-123"
       # 【按需修改】网页访问端口；升级时沿用原端口。
       PORT: "43210"

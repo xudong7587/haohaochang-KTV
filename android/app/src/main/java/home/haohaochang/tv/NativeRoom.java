@@ -146,10 +146,7 @@ final class NativeRoom extends FrameLayout implements RoomSession.Listener, Auto
     LinearLayout brand = new LinearLayout(activity);
     brand.setGravity(Gravity.CENTER_VERTICAL);
     ImageView mark = new ImageView(activity);
-    mark.setImageDrawable(new TvIcon(activity, "mic", ColorStateList.valueOf(Color.WHITE), 22));
-    mark.setPadding(dp(6), dp(6), dp(6), dp(6));
-    mark.setBackground(TvStyle.surface(activity, 0xffa086ec, 0xff6651bc, 10, 0x30f2e9ff));
-    mark.setElevation(dp(2));
+    mark.setImageResource(R.drawable.icon);
     brand.addView(mark, new LinearLayout.LayoutParams(dp(34), dp(34)));
     LinearLayout wordmark = new LinearLayout(activity);
     wordmark.setOrientation(LinearLayout.VERTICAL);

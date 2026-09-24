@@ -109,6 +109,20 @@ export function App() {
   const [authenticated, setAuthenticated] = useState(
     route === "admin" ? !!adminToken : !!roomToken,
   );
+  useEffect(() => {
+    if (route !== "admin" || adminToken) return;
+    let live = true;
+    api("/login", undefined, "GET", true)
+      .then((result) => {
+        if (!live) return;
+        acceptLogin(result.token);
+        setAuthenticated(true);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
   const roomReady = authenticated && !choosingRoom;
   const [password, setPassword] = useState(""),
     [loginBusy, setLoginBusy] = useState(false);
@@ -603,7 +617,7 @@ export function App() {
               request={(url, body, method) =>
                 api(url, body, method, route === "admin")
               }
-              token={route === "admin" ? adminToken : roomToken}
+              token={roomToken}
               notify={notify}
               refreshProfile={() => setRefresh((n) => n + 1)}
               back={() => {
@@ -926,10 +940,7 @@ export function App() {
                       }}
                     >
                       <span className="artist-card-photo">
-                        <ArtistArtwork
-                          profile={a}
-                          token={route === "admin" ? adminToken : roomToken}
-                        />
+                        <ArtistArtwork profile={a} token={roomToken} />
                       </span>
                       <span className="artist-card-caption">
                         <strong>{a.artist}</strong>

@@ -149,7 +149,7 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
     grid.setColumnWidth(dp(132));
     grid.setStretchMode(GridView.STRETCH_COLUMN_WIDTH);
     grid.setHorizontalSpacing(dp(12));
-    grid.setVerticalSpacing(dp(12));
+    grid.setVerticalSpacing(dp(8));
     grid.setClipToPadding(false);
     grid.setPadding(dp(3), dp(14), dp(3), dp(5));
     grid.setSelector(android.R.color.transparent);
@@ -316,9 +316,27 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
 
   private void focusCard(int position) {
     selectedPosition = Math.max(0, Math.min(rows.length() - 1, position));
-    grid.requestFocusFromTouch();
-    grid.setSelection(selectedPosition);
+    if (!grid.hasFocus()) grid.requestFocusFromTouch();
+    int first = grid.getFirstVisiblePosition();
+    int child = selectedPosition - first;
+    View visible = child >= 0 && child < grid.getChildCount() ? grid.getChildAt(child) : null;
+    boolean scrolled = false;
+    // The grid draws into its padding (clipToPadding=false). A card is fully
+    // visible until it crosses the actual viewport edge, including that area.
+    if (visible == null || visible.getTop() < 0
+        || visible.getBottom() > grid.getHeight()) {
+      if (grid.getChildCount() > 0) {
+        int direction = selectedPosition < first || visible != null && visible.getTop() < 0 ? -1 : 1;
+        int columns = Math.max(1, grid.getNumColumns());
+        int rowHeight = grid.getChildCount() > columns
+            ? grid.getChildAt(columns).getTop() - grid.getChildAt(0).getTop() : 0;
+        if (rowHeight > 0) grid.scrollListBy(direction * rowHeight);
+        else grid.setSelection(selectedPosition);
+      } else grid.setSelection(selectedPosition);
+      scrolled = true;
+    }
     highlightCards();
+    if (scrolled) grid.post(this::highlightCards);
   }
 
   private void highlightCards() {
@@ -924,7 +942,7 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
     find.getLayoutParams().width = dp(compact ? 44 : narrow ? 48 : 72);
     ((LayoutParams) find.getLayoutParams()).leftMargin = dp(compact ? 6 : 10);
     grid.setHorizontalSpacing(dp(compact ? 8 : 12));
-    grid.setVerticalSpacing(dp(compact ? 8 : 12));
+    grid.setVerticalSpacing(dp(8));
     grid.setPadding(dp(2), dp(compact ? 10 : 14), dp(2), dp(4));
     super.onMeasure(widthSpec, heightSpec);
   }

@@ -288,17 +288,45 @@ public class NativeRoomTest {
     press(KeyEvent.KEYCODE_DPAD_RIGHT);
     press(KeyEvent.KEYCODE_DPAD_RIGHT);
     layout(960, 540);
-    assertEquals(2, grid.getSelectedItemPosition());
+    assertEquals("Visible cards do not scroll the grid", 0, grid.getFirstVisiblePosition());
+    assertTrue(grid.getChildAt(2).isActivated());
     press(KeyEvent.KEYCODE_DPAD_DOWN);
     layout(960, 540);
-    assertEquals(2 + columns, grid.getSelectedItemPosition());
+    assertTrue(grid.getChildAt(2 + columns - grid.getFirstVisiblePosition()).isActivated());
     press(KeyEvent.KEYCODE_DPAD_DOWN);
     press(KeyEvent.KEYCODE_DPAD_DOWN);
     layout(960, 540);
     assertTrue("Remote scroll reveals offscreen cards", grid.getFirstVisiblePosition() > 0);
     press(KeyEvent.KEYCODE_DPAD_UP);
     layout(960, 540);
-    assertEquals(2 + columns * 2, grid.getSelectedItemPosition());
+    assertTrue(grid.getChildAt(2 + columns * 2 - grid.getFirstVisiblePosition()).isActivated());
+  }
+
+  @Test
+  @Config(qualifiers = "w1396dp-h785dp-land-440dpi")
+  public void catalogueKeepsThirdVisibleRowAt440Dpi() throws Exception {
+    JSONArray fixtures = new JSONArray();
+    for (int i = 0; i < 40; i++)
+      fixtures.put(RoomApi.object("id", "song-" + i, "title", "测试曲 " + i, "artist", "测试歌手"));
+    songsFixture = fixtures.toString();
+    find("歌名点歌").performClick();
+    drain();
+    layout(3840, 2160);
+    press(KeyEvent.KEYCODE_DPAD_RIGHT);
+    layout(3840, 2160);
+    GridView grid = (GridView) find("歌曲卡片");
+    int columns = grid.getNumColumns();
+    assertTrue("Third row exists", grid.getChildCount() > columns * 2);
+    assertTrue("Third row fits inside the actual viewport: bottom="
+            + grid.getChildAt(columns * 2).getBottom() + ", height=" + grid.getHeight()
+            + ", padding=" + grid.getPaddingBottom() + ", columns=" + columns,
+        grid.getChildAt(columns * 2).getBottom() <= grid.getHeight());
+    press(KeyEvent.KEYCODE_DPAD_DOWN);
+    layout(3840, 2160);
+    press(KeyEvent.KEYCODE_DPAD_DOWN);
+    layout(3840, 2160);
+    assertEquals("Focus on the complete third row does not scroll", 0, grid.getFirstVisiblePosition());
+    assertTrue(grid.getChildAt(columns * 2).isActivated());
   }
 
   @Test

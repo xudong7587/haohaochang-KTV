@@ -29,6 +29,7 @@ import { libraryDeleteApi } from "./library-delete.js";
 import { resourceRoot } from "./assets.js";
 import express from "express";
 import path from "node:path";
+import { createHash, randomBytes, scryptSync } from "node:crypto";
 import { mkdirSync, existsSync } from "node:fs";
 import { openStore } from "./db.js";
 
@@ -50,10 +51,40 @@ export function createApp(options = {}) {
   const store = openStore(dir),
     { db, get, set } = store;
   store.readOnlyMedia = !!options.readOnlyMedia;
-  const adminToken =
+  const initialAdminToken =
     options.adminToken || process.env.ADMIN_PASSWORD || process.env.ADMIN_TOKEN;
-  if (!adminToken || adminToken.length < 12)
-    throw new Error("请设置至少 12 位的 ADMIN_PASSWORD（管理密码）");
+  if (!initialAdminToken || initialAdminToken.length < 6)
+    throw new Error("请设置至少 6 位的 ADMIN_PASSWORD（管理密码）");
+  const passwordMatches = (value) => {
+    const saved = get("adminPasswordHash", null);
+    if (!saved) return equal(value, initialAdminToken);
+    if (typeof value !== "string" || !value || !saved.salt || !saved.hash)
+      return false;
+    return equal(scryptSync(value, saved.salt, 64).toString("hex"), saved.hash);
+  };
+  const sessionDigest = (value) =>
+    createHash("sha256").update(value).digest("hex");
+  const cookieName = "ktv_admin_session";
+  const cookieToken = (req) =>
+    req
+      .get("cookie")
+      ?.split(";")
+      .map((part) => part.trim())
+      .find((part) => part.startsWith(cookieName + "="))
+      ?.slice(cookieName.length + 1) || "";
+  const hasSession = (req) => {
+    const sessions = get("adminSessions", []);
+    const value = cookieToken(req);
+    return (
+      !!value &&
+      sessions.some(
+        (session) =>
+          session.expires > Date.now() &&
+          equal(session.digest, sessionDigest(value)),
+      )
+    );
+  };
+  const isAdmin = (req) => hasSession(req) || passwordMatches(token(req));
   const app = express();
   const rooms = createRoomRegistry(store);
   const clients = new Set();
@@ -98,12 +129,10 @@ export function createApp(options = {}) {
   const token = (req) =>
     req.get("authorization")?.replace(/^Bearer /, "") || req.query.token;
   const admin = (req, res, next) =>
-    equal(token(req), adminToken)
-      ? next()
-      : next(fail(401, "请输入正确的管理密码"));
+    isAdmin(req) ? next() : next(fail(401, "请输入正确的管理密码"));
   const member = (req, res, next) => {
     const room = rooms.byToken(token(req));
-    if (!room && !equal(token(req), adminToken))
+    if (!room && !isAdmin(req))
       return next(fail(401, "请登录 NAS 或扫描歌房二维码"));
     req.roomId = room?.id || LEGACY_ROOM;
     next();
@@ -111,8 +140,7 @@ export function createApp(options = {}) {
   app.use(
     "/api",
     requestLimits({
-      authenticated: (req) =>
-        equal(token(req), adminToken) || !!rooms.byToken(token(req)),
+      authenticated: (req) => !!rooms.byToken(token(req)) || isAdmin(req),
     }),
   );
   const events = liveEvents(clients, (roomId) => snapshot(roomId));
@@ -182,6 +210,17 @@ export function createApp(options = {}) {
     enqueue,
     snapshot,
     allowedOrigin,
+    changeAdminPassword(current, next) {
+      if (!passwordMatches(current)) throw fail(401, "当前管理密码不正确");
+      if (typeof next !== "string" || next.length < 6)
+        throw fail(400, "新密码至少需要 6 位");
+      const salt = randomBytes(16).toString("hex");
+      set("adminPasswordHash", {
+        salt,
+        hash: scryptSync(next, salt, 64).toString("hex"),
+      });
+      set("adminSessions", []);
+    },
   };
   const resolveReview = reviewsApi(routeContext);
   roomRegistryApi(routeContext);
@@ -203,9 +242,39 @@ export function createApp(options = {}) {
   backgroundApi(routeContext);
   app.get("/api/health", (req, res) => res.json({ ok: true }));
   app.get("/api/server-info", (req, res) => res.json(serverIdentity));
-  app.post("/api/login", admin, (req, res) =>
+  app.get("/api/login", admin, (req, res) =>
     res.json({ token: get("roomToken") }),
   );
+  app.post("/api/login", admin, (req, res) => {
+    const value = randomBytes(32).toString("hex");
+    const sessions = get("adminSessions", [])
+      .filter((session) => session.expires > Date.now())
+      .slice(-19);
+    sessions.push({
+      digest: sessionDigest(value),
+      expires: Date.now() + 7 * 86400000,
+    });
+    set("adminSessions", sessions);
+    res.cookie(cookieName, value, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: req.secure || req.get("x-forwarded-proto") === "https",
+      maxAge: 7 * 86400000,
+      path: "/",
+    });
+    res.json({ token: get("roomToken") });
+  });
+  app.post("/api/logout", (req, res) => {
+    if (hasSession(req))
+      set(
+        "adminSessions",
+        get("adminSessions", []).filter(
+          (session) => !equal(session.digest, sessionDigest(cookieToken(req))),
+        ),
+      );
+    res.clearCookie(cookieName, { path: "/" });
+    res.json({ ok: true });
+  });
   app.get("/api/events", member, (req, res) => {
     if (clients.size >= 40) throw fail(429, "连接数过多");
     res.set({

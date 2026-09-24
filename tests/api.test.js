@@ -73,6 +73,71 @@ async function fixture(t) {
   };
   return { ...service, base, root, dir, call, seed };
 }
+test("browser cookie lasts a week and changing password revokes old credentials", async (t) => {
+  const f = await fixture(t);
+  const request = (
+    url,
+    { cookie = "", password = "", method = "GET", body } = {},
+  ) =>
+    fetch(f.base + "/api" + url, {
+      method,
+      headers: {
+        ...(cookie ? { Cookie: cookie } : {}),
+        ...(password ? { Authorization: `Bearer ${password}` } : {}),
+        "Content-Type": "application/json",
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+  const login = await request("/login", {
+    method: "POST",
+    password: "test-password-12345",
+  });
+  assert.equal(login.status, 200);
+  assert.match(login.headers.get("set-cookie"), /Max-Age=604800/);
+  assert.match(login.headers.get("set-cookie"), /HttpOnly/);
+  const cookie = login.headers.get("set-cookie").split(";")[0];
+  assert.equal((await request("/admin", { cookie })).status, 200);
+  assert.equal(
+    (
+      await request("/admin/password", {
+        cookie,
+        method: "POST",
+        body: { currentPassword: "bad", newPassword: "123456" },
+      })
+    ).status,
+    401,
+  );
+  assert.equal(
+    (
+      await request("/admin/password", {
+        cookie,
+        method: "POST",
+        body: { currentPassword: "test-password-12345", newPassword: "12345" },
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await request("/admin/password", {
+        cookie,
+        method: "POST",
+        body: { currentPassword: "test-password-12345", newPassword: "123456" },
+      })
+    ).status,
+    200,
+  );
+  assert.equal((await request("/admin", { cookie })).status, 401);
+  assert.equal(
+    (await request("/admin", { password: "test-password-12345" })).status,
+    401,
+  );
+  assert.equal((await request("/admin", { password: "123456" })).status, 200);
+  assert.equal(
+    (await request("/login", { method: "POST", password: "123456" })).status,
+    200,
+  );
+});
 test("authentication, admin isolation, proxy origin independence and UTF-8 token safety", async (t) => {
   const f = await fixture(t);
   assert.equal((await f.call("/state", undefined, "GET", "")).status, 401);

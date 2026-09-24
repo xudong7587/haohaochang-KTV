@@ -41,6 +41,23 @@ export function nextInDirection(active, items, key) {
   return best;
 }
 
+export function revealFocusedCard(target) {
+  if (!target) return;
+  const card = target.closest(".song-poster-card,.artist-card") || target;
+  const scroller = target.closest("main");
+  if (!scroller || scroller.scrollHeight <= scroller.clientHeight) {
+    card.scrollIntoView({ block: "nearest" });
+    return;
+  }
+  const visible = scroller.getBoundingClientRect();
+  const bounds = card.getBoundingClientRect();
+  const margin = 8;
+  if (bounds.bottom > visible.bottom - margin)
+    scroller.scrollTop += bounds.bottom - visible.bottom + margin;
+  else if (bounds.top < visible.top + margin)
+    scroller.scrollTop += bounds.top - visible.top - margin;
+}
+
 export function useTvNavigation({
   enabled,
   nested,
@@ -87,7 +104,7 @@ export function useTvNavigation({
         candidates[0];
       if (!target) return false;
       target.focus({ preventScroll: true });
-      target.scrollIntoView({ block: "nearest" });
+      revealFocusedCard(target);
       return true;
     };
     // Artist songs arrive asynchronously; keep focus within the content while
@@ -187,7 +204,7 @@ export function useTvNavigation({
           nextInDirection(active, items, event.key)
         : items[0];
       target?.focus({ preventScroll: true });
-      target?.scrollIntoView({ block: "nearest" });
+      revealFocusedCard(target);
     };
     const pointer = () => document.body.classList.remove("keyboard");
     document.addEventListener("keydown", key);

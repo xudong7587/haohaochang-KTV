@@ -7,8 +7,9 @@ android {
         applicationId 'home.haohaochang.tv'
         minSdk 23
         targetSdk 28
-        versionCode 40
-        versionName '1.1.3'
+        versionCode 42
+        versionName '1.1.4'
+        manifestPlaceholders = [appLabel: '好好唱 KTV']
     }
     signingConfigs {
         release {
@@ -21,7 +22,13 @@ android {
             }
         }
     }
-    buildTypes { release { minifyEnabled false; signingConfig signingConfigs.release } }
+    buildTypes {
+        debug {
+            applicationIdSuffix '.debug'
+            manifestPlaceholders = [appLabel: '好好唱 KTV（测试版）']
+        }
+        release { minifyEnabled false; signingConfig signingConfigs.release }
+    }
     // Distributed directly to home TVs, not Google Play. Keep the existing TV
     // behavior target; all other release lint checks remain enabled.
     lint { disable 'ExpiredTargetSdkVersion' }

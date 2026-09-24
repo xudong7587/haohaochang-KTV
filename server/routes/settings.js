@@ -32,6 +32,7 @@ export function settingsApi({
   enqueue,
   snapshot,
   allowedOrigin,
+  changeAdminPassword,
 }) {
   biliLoginApi({ app, admin, store });
   app.get("/api/admin/tasks", admin, (req, res) => res.json(taskStatus(store)));
@@ -75,6 +76,10 @@ export function settingsApi({
     set("publicUrl", value);
     if (typeof req.body.onlineEnabled === "boolean")
       set("onlineEnabled", req.body.onlineEnabled);
+    res.json({ ok: true });
+  });
+  app.post("/api/admin/password", admin, (req, res) => {
+    changeAdminPassword(req.body.currentPassword, req.body.newPassword);
     res.json({ ok: true });
   });
   app.get("/api/admin/ai", admin, (req, res) => {

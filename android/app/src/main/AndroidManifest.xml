@@ -4,10 +4,16 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <uses-feature android:name="android.hardware.touchscreen" android:required="false"/>
     <uses-feature android:name="android.software.leanback" android:required="false"/>
-    <application android:label="好好唱 KTV" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:usesCleartextTraffic="true" android:allowBackup="false" android:hardwareAccelerated="true" android:icon="@drawable/icon" android:banner="@drawable/banner">
-        <provider android:name=".UpdateProvider" android:authorities="home.haohaochang.tv.updates" android:exported="false" android:grantUriPermissions="true"/>
-        <activity android:name=".MainActivity" android:exported="true" android:enableOnBackInvokedCallback="true" android:configChanges="orientation|screenSize|keyboardHidden">
+    <application android:label="${appLabel}" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:usesCleartextTraffic="true" android:allowBackup="false" android:hardwareAccelerated="true" android:icon="@drawable/icon" android:banner="@drawable/banner">
+        <provider android:name=".UpdateProvider" android:authorities="${applicationId}.updates" android:exported="false" android:grantUriPermissions="true"/>
+        <activity android:name=".MainActivity" android:exported="true" android:resizeableActivity="true" android:enableOnBackInvokedCallback="true" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/><category android:name="android.intent.category.LEANBACK_LAUNCHER"/></intent-filter>
+            <!-- vivo CastKit's documented entry; application listing still requires vivo onboarding. -->
+            <intent-filter>
+                <action android:name="com.ucar.intent.action.UCAR"/>
+                <category android:name="com.ucar.intent.category.UCAR"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
         </activity>
     </application>
 </manifest>
