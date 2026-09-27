@@ -67,25 +67,25 @@ NAS 主镜像支持 amd64 与 ARM64。PC GPU 分离需要支持 CUDA 的 NVIDIA 
 
 ### 1. 在 NAS 安装
 
-从 Release 下载 `haohaochang-nas-v1.1.4.zip`，解压后按架构导入 `docker-compose.yaml`（Intel／AMD x86）或 `docker-compose.arm64.yaml`（ARM64）。主程序与分离容器自动连接，电视和 PC 保留自动发现。
+从 Release 下载 `haohaochang-nas-v1.1.5.zip`，解压后按架构导入 `docker-compose.yaml`（Intel／AMD x86）或 `docker-compose.arm64.yaml`（ARM64）。主程序与分离容器自动连接，电视和 PC 保留自动发现。
 
 设置至少 6 位的管理密码，并映射三个目录：`/data` 保存数据库、任务、设置和模型缓存，`/media` 保存正式曲库，`/download` 暂存导入内容。默认端口为 `43210`，升级时沿用原端口和目录。
 
 按 Compose 中的“必须修改／核对目录”注释填写。默认使用同目录下的 `data`、`media`、`download` 文件夹；如果更改 data 路径，CPU／NPU 的 `/data` 映射也要填写同一路径。三个容器均使用 host 网络，无需分配 Docker 子网，避免默认网络地址池耗尽导致部署失败。
 
-镜像仍为 `ghcr.io/xudong7587/haohaochang:latest`，可公开拉取。启动后打开 `http://NAS-IP:端口/admin`，输入管理密码。从 v1.0.7／v1.0.8 升级需替换 Compose、拉取新版 ktv 并启动整套服务；保留原 data。以后日常只执行 `docker compose pull ktv` 和 `docker compose up -d --no-deps ktv`。完整步骤见 [NAS 安装与升级](docs/NAS安装与升级.md)。
+镜像仍为 `ghcr.io/xudong7587/haohaochang:latest`，可公开拉取。启动后打开 `http://NAS-IP:端口/admin`，输入管理密码。本次升级需替换 Compose，填回原密码、端口和目录，执行 `docker compose pull` 与 `docker compose up -d` 更新主程序及分离容器；保留原 data。以后日常只执行 `docker compose pull ktv` 和 `docker compose up -d --no-deps ktv`。完整步骤见 [NAS 安装与升级](docs/NAS安装与升级.md)。
 
 ### 2. 导入并整理歌曲
 
 把已有文件放入曲库目录，在后台扫描；也可以在“在线找歌”中选择有权使用的内容、粘贴授权链接或导入收藏内容。确认片段后，系统继续处理图片、歌词和播放资源。仅处理自有或已获得相应许可的媒体。
 
-需要电脑加速时，下载 `haohaochang-resource-ai-v1.1.4.zip`，在 Windows 解压并运行 `start.cmd`。首次会下载运行环境，启动后 NAS 可连接它处理任务。“人声分离”页面集中显示 PC、NPU 和 CPU 状态，处理顺序为 PC → NPU → CPU → 已配置的外部 API。
+需要电脑加速时，下载 `haohaochang-resource-ai-v1.1.5.zip`，在 Windows 解压并运行 `start.cmd`。首次会下载运行环境，启动后在 PC 本机核对 NAS 显示的配对码并确认，再处理任务。“人声分离”页面集中显示 PC、NPU 和 CPU 状态，处理顺序为 PC → NPU → CPU → 已配置的外部 API。
 
 已有原唱和伴奏的半标准歌曲可以先唱，再补视频；缺少歌词不阻止点歌。资料不明确时，在编辑器中核对；失败任务可重试，旧资源继续保留。
 
 ### 3. 打开播放设备
 
-Android 电视、手机和平板使用同一份 `haohaochang-tv-v1.1.4.apk`。首次启动寻找同一局域网中的 NAS；找不到时手动输入地址，再按提示扫码登录。电脑或浏览器直接打开 `/play`。如浏览器限制有声自动播放，点一次播放即可开始。
+Android 电视、手机和平板使用同一份 `haohaochang-tv-v1.1.5.apk`。首次启动寻找同一局域网中的 NAS；找不到时手动输入地址，再按提示扫码登录。电脑或浏览器直接打开 `/play`。如浏览器限制有声自动播放，点一次播放即可开始。
 
 打开播放端会接续已点歌曲；没人点歌时播放随机原唱。同一轮先覆盖可用曲库，新入库歌曲更优先。默认歌房由 TV 优先播放，网页不会抢走正在使用的 TV。
 
