@@ -16,6 +16,7 @@ const stages = {
 };
 export function MobileRequests({ revision = 0 }) {
   const [current, setCurrent] = useState(null);
+  const [dismissed, setDismissed] = useState(() => new Set());
   useEffect(() => {
     let live = true,
       timer;
@@ -24,8 +25,16 @@ export function MobileRequests({ revision = 0 }) {
         const data = await api("/requests/status");
         if (live)
           setCurrent(
-            data.find((row) =>
-              ["running", "queued", "waiting-worker"].includes(row.status),
+            data.find(
+              (row) =>
+                [
+                  "running",
+                  "queued",
+                  "waiting-worker",
+                  "failed",
+                  "review",
+                ].includes(row.status) &&
+                !dismissed.has(row.id + ":" + row.status),
             ) || null,
           );
       } catch {
@@ -39,8 +48,9 @@ export function MobileRequests({ revision = 0 }) {
       live = false;
       clearTimeout(timer);
     };
-  }, [revision]);
+  }, [revision, dismissed]);
   if (!current) return null;
+  const terminal = ["failed", "review"].includes(current.status);
   const percent = Number.isFinite(current.percent)
     ? current.percent
     : undefined;
@@ -60,8 +70,24 @@ export function MobileRequests({ revision = 0 }) {
         {current.title}
       </span>
       <span>{stage}</span>
-      <progress max="100" value={percent} aria-label={stage} />
-      {percent !== undefined && <small>{Math.round(percent)}%</small>}
+      {!terminal && <progress max="100" value={percent} aria-label={stage} />}
+      {!terminal && percent !== undefined && (
+        <small>{Math.round(percent)}%</small>
+      )}
+      {terminal && (
+        <button
+          aria-label="关闭任务提示"
+          onClick={() => {
+            setDismissed(
+              (previous) =>
+                new Set([...previous, current.id + ":" + current.status]),
+            );
+            setCurrent(null);
+          }}
+        >
+          关闭
+        </button>
+      )}
     </div>
   );
 }

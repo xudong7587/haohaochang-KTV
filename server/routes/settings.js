@@ -33,6 +33,7 @@ export function settingsApi({
   snapshot,
   allowedOrigin,
   changeAdminPassword,
+  revokeMemberSessions,
 }) {
   biliLoginApi({ app, admin, store });
   app.get("/api/admin/tasks", admin, (req, res) => res.json(taskStatus(store)));
@@ -78,9 +79,17 @@ export function settingsApi({
       set("onlineEnabled", req.body.onlineEnabled);
     res.json({ ok: true });
   });
-  app.post("/api/admin/password", admin, (req, res) => {
-    changeAdminPassword(req.body.currentPassword, req.body.newPassword);
+  app.post("/api/admin/password", admin, async (req, res) => {
+    await changeAdminPassword(
+      req.body.currentPassword,
+      req.body.newPassword,
+      req.body.revokeDevices !== false,
+    );
     res.json({ ok: true });
+  });
+  app.post("/api/admin/sessions/revoke", admin, (_req, res) => {
+    revokeMemberSessions();
+    res.json({ ok: true, token: get("roomToken") });
   });
   app.get("/api/admin/ai", admin, (req, res) => {
     const config = get("ai", {});

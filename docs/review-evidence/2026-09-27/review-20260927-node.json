@@ -1,0 +1,44 @@
+{
+  "passwordRevocation": {
+    "oldAdminCookie": 401,
+    "oldAdminPassword": 401,
+    "oldRoomToken": 200,
+    "oldIndependentToken": 200,
+    "newRoomUsingOldToken": 200
+  },
+  "cancelledFavorite": {
+    "deleteStatus": 200,
+    "preservedMissingJobId": true,
+    "remainingJobs": 0,
+    "bundleStatus": "downloading",
+    "explicitRetryStatus": 200,
+    "jobsAfterExplicitRetry": 1
+  },
+  "deleteEnqueueRace": {
+    "enqueueStatus": 200,
+    "deleteStatus": 400,
+    "deleteError": "FOREIGN KEY constraint failed",
+    "sourceRemains": false,
+    "playbackRemains": false,
+    "queued": true,
+    "songRemains": true
+  },
+  "failedRequest": {
+    "queuedRows": 1,
+    "failedRows": 0
+  },
+  "throttledHashing": {
+    "withoutPassword": {
+      "requests": 15,
+      "rejected": 15,
+      "elapsedMs": 231,
+      "cpuMs": 0
+    },
+    "withWrongPassword": {
+      "requests": 15,
+      "rejected": 15,
+      "elapsedMs": 680,
+      "cpuMs": 625
+    }
+  }
+}

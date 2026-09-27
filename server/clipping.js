@@ -71,7 +71,9 @@ export async function clipOnPc(
   const target = path.join(staging, "complete.mp4");
   const valid = (info) =>
     info.hasVideo &&
-    (videoOnly ? !info.audio.length : info.audio.length > 0) &&
+    (videoOnly
+      ? !info.audio.length
+      : info.audio.length === source.audio.length) &&
     (!source.height || info.height >= source.height) &&
     (!source.videoFps || info.videoFps + 0.1 >= source.videoFps) &&
     Math.abs(info.duration - duration) < 0.5;
@@ -118,6 +120,7 @@ export async function clipOnPc(
           result.validated ? "packets" : "decode",
         );
         store.set(result.checkpointKey, null);
+        await result.acknowledge();
         return target;
       }
     } catch {

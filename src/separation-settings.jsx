@@ -17,7 +17,7 @@ async function request(path, body) {
 }
 const names = { pc: "PC 分离器", npu: "NAS NPU", cpu: "NAS CPU" };
 const descriptions = {
-  pc: "优先使用已连接的电脑。启动 PC 整理器后可自动发现并配对。",
+  pc: "优先使用已连接的电脑。首次连接需要在 PC 整理器本机确认配对码。",
   npu: "电脑不可用时使用 Intel NPU；设备与模型匹配成功后自动接手。",
   cpu: "前面的服务不可用时，由 NAS 自己处理。速度较慢，可留在后台完成。",
 };
@@ -128,6 +128,7 @@ export function SeparationSettings() {
                 </small>
                 {provider.kind === "pc" && (
                   <div className="separation-discovery">
+                    <p role="status">{data.discovery?.message}</p>
                     <label className="checkbox">
                       <input
                         type="checkbox"
@@ -159,6 +160,35 @@ export function SeparationSettings() {
                     >
                       重新查找 PC
                     </button>
+                    <button
+                      disabled={busy}
+                      onClick={async () => {
+                        if (
+                          !window.confirm(
+                            "清除已记住的 PC 连接？随后需在 PC 本机重新确认配对。",
+                          )
+                        )
+                          return;
+                        setBusy(true);
+                        setError("");
+                        try {
+                          await request("ai/pc", {
+                            clearPcKey: true,
+                            pcEndpoint: "",
+                            autoDiscover: true,
+                          });
+                          setMessage(
+                            "请核对这里显示的配对码，并在 PC 整理器本机确认。",
+                          );
+                        } catch (e) {
+                          setError(e.message);
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    >
+                      重新配对 PC
+                    </button>
                   </div>
                 )}
               </section>
@@ -167,7 +197,8 @@ export function SeparationSettings() {
           {message && <p role="status">{message}</p>}
           {!data.config.managed && !data.config.embedded && (
             <p>
-              使用 NAS 安装包中的 Compose 启动本机分离容器后，CPU 和 NPU 会自动连接。
+              使用 NAS 安装包中的 Compose 启动本机分离容器后，CPU 和 NPU
+              会自动连接。
             </p>
           )}
           <details className="settings-card">

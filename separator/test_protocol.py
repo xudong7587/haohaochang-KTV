@@ -74,6 +74,33 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(sum(result is not None for result in results), 2)
         self.assertEqual(self.store.pending(), 2)
 
+    def test_retention_waits_for_ack_grace_and_active_downloads(self):
+        import time
+        job, _ = self.store.reserve('htdemucs', 'retention', 'key')
+        self.store.write(job, dict(status='done'))
+        (self.store.root / job / 'instrumental.wav').write_bytes(b'result')
+        self.store.acknowledge(job)
+        self.store.acquire_result(job)
+        future = time.time() + 3700
+        self.store.cleanup(now=future, force=True)
+        self.assertTrue((self.store.root / job).exists())
+        self.store.release_result(job)
+        self.store.cleanup(now=future, force=True)
+        self.assertFalse((self.store.root / job).exists())
+        new, created = self.store.reserve('htdemucs', 'retry', 'key')
+        self.assertTrue(created)
+        self.store.cleanup(now=future + 700000, force=True)
+        self.assertTrue((self.store.root / new).exists())
+
+    def test_unacknowledged_results_expire_and_quota_rejects_admission(self):
+        import time
+        job, _ = self.store.reserve('htdemucs', 'old')
+        self.store.write(job, dict(status='done', updated=time.time()-604801))
+        self.store.cleanup(force=True)
+        self.assertFalse((self.store.root / job).exists())
+        with patch.dict(os.environ, {'SEPARATION_MAX_WORK_BYTES':'0'}):
+            with self.assertRaises(OverflowError): self.store.reserve('htdemucs','quota')
+
     def test_actual_wav_frames_reject_short_output(self):
         def create(name, duration):
             target = Path(self.temp.name) / name
@@ -128,6 +155,14 @@ class UploadTests(unittest.IsolatedAsyncioTestCase):
         await first
         # The slot is released after completion.
         await guard(scope, receive, send)
+
+    async def test_unauthorized_upload_never_reads_body_or_calls_parser(self):
+        async def forbidden(*args): self.fail('Unauthorized body was read')
+        responses = []
+        async def send(message): responses.append(message)
+        with patch.dict(os.environ, {'SEPARATION_API_KEY':'secret'}):
+            await UploadGuard(forbidden)(dict(type='http', method='POST', path='/clip', headers=[]), forbidden, send)
+        self.assertEqual(responses[0]['status'],401)
 
     async def test_declared_large_body_rejected_without_parser(self):
         async def downstream(*args):
@@ -225,6 +260,28 @@ class RouteTests(unittest.TestCase):
         self.assertEqual({s['codec_type'] for s in info['streams']},{'video','audio'})
         self.assertTrue((folder/'input.mp4').is_file())
 
+    def test_clipping_preserves_both_audio_tracks(self):
+        import json
+        import shutil
+        import subprocess
+        from clipping import execute_clip
+        ffmpeg = os.getenv('FFMPEG') or shutil.which('ffmpeg')
+        ffprobe = os.getenv('FFPROBE') or shutil.which('ffprobe')
+        if not ffmpeg or not ffprobe: self.skipTest('FFmpeg and ffprobe required')
+        job, _ = self.module.jobs.reserve('clip:0:1', 'dual audio')
+        folder = self.module.ROOT / job
+        subprocess.run([ffmpeg,'-y','-v','error','-f','lavfi','-i','color=s=320x240:r=25:d=2',
+            '-f','lavfi','-i','sine=frequency=440:duration=2','-f','lavfi','-i','sine=frequency=880:duration=2',
+            '-map','0:v','-map','1:a','-map','2:a','-c:v','libx264','-preset','ultrafast','-c:a','aac',str(folder/'input.mp4')],check=True)
+        execute_clip(self.module.jobs,job,0,1,False)
+        self.assertEqual(self.module.jobs.state(job)['status'],'done')
+        info=json.loads(subprocess.check_output([ffprobe,'-v','error','-show_streams','-of','json',str(folder/'clip.mp4')]))
+        self.assertEqual(sum(s['codec_type']=='audio' for s in info['streams']),2)
+        headers={'Authorization':'Bearer test-only'}
+        self.assertEqual(self.client.get('/clip-artifacts/'+job,headers=headers).status_code,200)
+        self.assertEqual(self.module.jobs.readers.get(job,0),0)
+        self.assertEqual(self.client.post('/jobs/'+job+'/ack',headers=headers).status_code,200)
+
     def test_chunked_oversized_multipart_is_rejected_with_413(self):
         from fastapi import FastAPI, File, UploadFile
         from fastapi.testclient import TestClient
@@ -237,7 +294,7 @@ class RouteTests(unittest.TestCase):
                 b'Content-Type: audio/mp4\r\n\r\n' + b'a' * 200 + b'\r\n--boundary--\r\n')
         with TestClient(limited) as client:
             response = client.post('/separate', content=iter([body[:60], body[60:]]),
-                headers={'Content-Type':'multipart/form-data; boundary=boundary'})
+                headers={'Authorization':'Bearer test-only', 'Content-Type':'multipart/form-data; boundary=boundary'})
         self.assertEqual(response.status_code, 413)
 
     def test_video_preparation_removes_audio_and_keeps_original_input(self):

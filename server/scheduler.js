@@ -27,6 +27,8 @@ export function createScheduler(
     resolveStop();
   }
   function addJob(kind, payload) {
+    if (songIdFor(payload) && get("deletion:" + songIdFor(payload)))
+      throw Object.assign(new Error("歌曲正在删除"), { status: 409 });
     function promote(existing) {
       if (payload.priority === "mobile" || payload.enqueue) {
         const p = JSON.parse(existing.payload);

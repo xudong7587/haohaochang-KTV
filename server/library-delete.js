@@ -4,6 +4,11 @@ import { createHash } from "node:crypto";
 import { inside, safeMedia } from "./media-utils.js";
 import { currentSong, withSongWrite } from "./song-writes.js";
 import { intakeCleanupSources } from "./local-intake.js";
+import {
+  deletionKey,
+  finishDeletion,
+  quarantineDeletion,
+} from "./song-deletion.js";
 
 export async function deletionPlan(store, id, roots, cache, legacyCache) {
   const song = currentSong(store, id);
@@ -193,31 +198,41 @@ export function libraryDeleteApi({
           store.db.prepare("SELECT id FROM queue WHERE song_id=?").get(song.id)
         )
           throw new Error("请先移出播放队列");
-        const plan = await deletionPlan(
-          store,
-          song.id,
-          allowed,
-          cache,
-          legacyCache,
-        );
-        if (!req.body.token || req.body.token !== plan.token)
-          throw new Error("文件或歌曲资料已变化，请重新查看删除清单");
-        // Every absolute target has been checked against its configured root above.
-        for (const target of plan.targets)
-          await rm(target.path, { recursive: target.directory, force: true });
-        for (const job of store.db
-          .prepare("SELECT id,payload FROM jobs")
-          .all()) {
-          const p = JSON.parse(job.payload);
-          if ([p.id, p.existingId, p.songId].includes(song.id))
-            store.db.prepare("DELETE FROM jobs WHERE id=?").run(job.id);
-        }
-        store.db.prepare("DELETE FROM songs WHERE id=?").run(song.id);
-        for (const { key } of store.db
-          .prepare("SELECT key FROM settings")
-          .all()) {
-          if (key.endsWith(":" + song.id) || key.includes(":" + song.id + ":"))
-            store.db.prepare("DELETE FROM settings WHERE key=?").run(key);
+        const key = deletionKey(song.id);
+        store.set(key, { committed: false, targets: [] });
+        try {
+          const plan = await deletionPlan(
+            store,
+            song.id,
+            allowed,
+            cache,
+            legacyCache,
+          );
+          if (!req.body.token || req.body.token !== plan.token)
+            throw new Error("文件或歌曲资料已变化，请重新查看删除清单");
+          quarantineDeletion(store, song.id, plan.targets, allowed, () => {
+            for (const job of store.db
+              .prepare("SELECT id,payload FROM jobs")
+              .all()) {
+              const p = JSON.parse(job.payload);
+              if ([p.id, p.existingId, p.songId].includes(song.id))
+                store.db.prepare("DELETE FROM jobs WHERE id=?").run(job.id);
+            }
+            store.db.prepare("DELETE FROM songs WHERE id=?").run(song.id);
+            for (const { key } of store.db
+              .prepare("SELECT key FROM settings")
+              .all()) {
+              if (
+                key !== deletionKey(song.id) &&
+                (key.endsWith(":" + song.id) ||
+                  key.includes(":" + song.id + ":"))
+              )
+                store.db.prepare("DELETE FROM settings WHERE key=?").run(key);
+            }
+          });
+        } catch (error) {
+          finishDeletion(store, song.id, allowed);
+          throw error;
         }
       },
       { idle: true },

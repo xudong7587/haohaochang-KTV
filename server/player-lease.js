@@ -50,5 +50,14 @@ export function createPlayerLease({
     owner = { id, type: kind, seen: time };
     return { changed, freshClaim, owner: snapshot() };
   }
-  return { heartbeat, snapshot, owns: (id) => online() && owner.id === id };
+  return {
+    heartbeat,
+    snapshot,
+    owns: (id) => online() && owner.id === id,
+    revoke() {
+      for (const page of pages.values()) page.revoked = true;
+      owner = null;
+      revision++;
+    },
+  };
 }

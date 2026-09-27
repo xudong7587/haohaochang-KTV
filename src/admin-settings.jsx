@@ -13,6 +13,7 @@ export function Settings({ admin, attempt, refresh }) {
   const [section, setSection] = useState("tasks");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [revokeDevices, setRevokeDevices] = useState(true);
   const refreshRef = useRef(refresh);
   refreshRef.current = refresh;
   useEffect(() => {
@@ -79,7 +80,7 @@ export function Settings({ admin, attempt, refresh }) {
             const changed = await attempt(() =>
               api(
                 "/admin/password",
-                { currentPassword, newPassword },
+                { currentPassword, newPassword, revokeDevices },
                 "POST",
                 true,
               ),
@@ -116,7 +117,31 @@ export function Settings({ admin, attempt, refresh }) {
             />
           </label>
           <button className="primary">保存新密码</button>
+          <label>
+            <input
+              type="checkbox"
+              checked={revokeDevices}
+              onChange={(event) => setRevokeDevices(event.target.checked)}
+            />
+            同时退出所有播放和点歌设备
+          </label>
+          <p>退出后电视和手机需要重新登录，曲库及已点列表保留。</p>
         </form>
+        <button
+          onClick={() =>
+            attempt(async () => {
+              const result = await api(
+                "/admin/sessions/revoke",
+                {},
+                "POST",
+                true,
+              );
+              acceptLogin(result.token);
+            }, "旧播放和点歌凭证已撤销，请重新登录设备")
+          }
+        >
+          退出所有播放和点歌设备
+        </button>
       </div>
       <div hidden={section !== "media"}>
         <section className="settings-card">

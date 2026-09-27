@@ -93,6 +93,7 @@ export async function separateSong(store, song, cache) {
           /* A valid accompaniment remains available if optional alignment fails. */
         }
         store.set(result.checkpointKey, null);
+        await result.acknowledge?.();
         return true;
       } finally {
         await rm(staging, { recursive: true, force: true });

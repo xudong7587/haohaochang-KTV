@@ -1,6 +1,16 @@
-# NAS 安装与升级 · v1.1.4
+# NAS 安装与升级 · v1.1.5
 
-本版把收藏夹下载改为应用自己的 B 站取流，不再依赖网页解析，只更新主镜像。主程序、CPU 分离和 Intel NPU 分离仍是独立容器，主程序保留 Python、FFmpeg、图片处理和下载工具；CPU／NPU 沿用固定的 1.0.8 镜像，并锁定 SHA-256 摘要；以后日常更新只更换主程序。
+本版修复标准版对抗性审查发现的权限与数据完整性问题：删除失败可恢复文件，PC 首次配对需本机确认，未授权上传在读取文件前拒绝，改密可撤销旧设备。双音轨裁剪保留全部音轨，分离器增加结果回收与空间保护，手机保留近期失败／待核对提示。
+
+## v1.1.5 升级操作
+
+1. 等当前整理任务完成，下载 `haohaochang-nas-v1.1.5.zip`。用新版 Compose 替换旧文件，并填回原管理密码、端口和目录映射。运行 `docker compose pull` 后运行 `docker compose up -d`，同时更新主程序和独立分离容器；ARM64 使用 `-f docker-compose.arm64.yaml`。本次包含分离器修复，不能只更新 ktv。
+2. PC 下载 `haohaochang-resource-ai-v1.1.5.zip`，退出整理器后覆盖程序文件，保留 `worker.json`、`runtime`、`.venv`、`data`，再启动。新配对时在 NAS「人声分离」查看配对码，在 PC 本机详细页面的「NAS 配对」核对并确认。
+3. 如需断开旧 NAS，在 PC 本机详细页面撤销连接；随后在 NAS「人声分离」点击「重新配对 PC」，再次核对配对码。升级前已持有 PC 密钥的设备继续可用；若担心旧密钥泄露，应主动撤销一次。
+4. 修改管理密码默认勾选「退出所有播放和点歌设备」，旧二维码／歌房凭据失效，需重新登录或扫码。曲库与已点队列保留。也可在管理密码区域单独退出所有设备。
+5. `haohaochang-tv-v1.1.5.apk` 使用原正式签名覆盖安装；本次 APK 同步版本，不增加车载功能。`haohaochang-preprocess-v1.1.5.zip` 为配套重命名工具。
+
+完成／失败任务的临时输入与结果会自动回收，NAS 已保存到正式曲库的资源不受影响。任务仍在传输或处理时不会被回收；超过保留期后需要重新提交任务。容量限制是新任务接纳门槛，运行中输出仍可能增长，应给工作盘留出余量。
 
 ## 选择配置
 
@@ -33,11 +43,11 @@ x86 NAS 没有 Intel NPU 时，NPU 状态显示未就绪，任务自动尝试 CP
 
 ```sh
 # Intel / AMD x86-64 NAS，在本包所在目录执行
-docker compose pull ktv
+docker compose pull
 docker compose up -d
 
 # ARM64 NAS 使用以下两条
-docker compose -f docker-compose.arm64.yaml pull ktv
+docker compose -f docker-compose.arm64.yaml pull
 docker compose -f docker-compose.arm64.yaml up -d
 ```
 
@@ -47,7 +57,7 @@ docker compose -f docker-compose.arm64.yaml up -d
 
 ## 首次安装
 
-从本版 Release 下载 `haohaochang-nas-v1.1.4.zip`。设置至少 6 位的管理密码，确认 `/data`、`/media`、`/download` 的映射后，按上面的命令启动。打开 `http://NAS-IP:端口/admin` 登录。
+从本版 Release 下载 `haohaochang-nas-v1.1.5.zip`。设置至少 6 位的管理密码，确认 `/data`、`/media`、`/download` 的映射后，按上面的命令启动。打开 `http://NAS-IP:端口/admin` 登录。
 
 三个容器均使用 host 网络，保留 PC 和 TV 自动发现；CPU／NPU 只监听本机 `127.0.0.1:18002`／`18001`。无需创建 Docker bridge 子网，也无需在路由器或防火墙开放分离端口。
 
@@ -56,7 +66,7 @@ docker compose -f docker-compose.arm64.yaml up -d
 ## 以后日常更新
 
 ```sh
-docker compose pull ktv
+docker compose pull
 docker compose up -d --no-deps ktv
 ```
 
@@ -72,4 +82,4 @@ ARM64 在两条命令的 `compose` 后都加上 `-f docker-compose.arm64.yaml`�
 
 模型优先复用 `data/separator/models`，否则使用 `data/models`；NPU 缓存优先复用 `data/npu/npu-cache`，否则使用 `data/npu-cache`。v1.0.7／v1.0.8 的任务继续使用 `data/separation/demucs` 和 `data/separation/openvino-npu`，不删除旧数据。
 
-网页卡片与浏览器登录随 NAS 主镜像更新；原生卡片与统一图标需安装 `haohaochang-tv-v1.1.4.apk`，同签名覆盖可保留登录。现有 PC 整理器仍兼容；新安装可用 `haohaochang-resource-ai-v1.1.4.zip`。
+网页卡片与浏览器登录随 NAS 主镜像更新；原生卡片与统一图标需安装 `haohaochang-tv-v1.1.5.apk`，同签名覆盖可保留登录。本次 PC 修复需要更新整理器，请使用 `haohaochang-resource-ai-v1.1.5.zip`。

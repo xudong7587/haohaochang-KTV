@@ -1,0 +1,7 @@
+{
+  "message": "request to https://registry.npmjs.org/-/npm/v1/security/advisories/bulk failed, reason: connect ETIMEDOUT 198.18.0.226:443",
+  "error": {
+    "summary": "",
+    "detail": ""
+  }
+}

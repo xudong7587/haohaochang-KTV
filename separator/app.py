@@ -1,11 +1,11 @@
 """ktv-separation-v1 routes shared by the CPU container and PC launcher."""
 import concurrent.futures
 import hmac
+import threading
 import os
 import re
 from pathlib import Path
 from fastapi import FastAPI, Depends, File, Form, Header, HTTPException, UploadFile
-from fastapi.responses import FileResponse
 from job_store import JobStore
 from inference import separate as execute_separation
 from upload_guard import UploadGuard
@@ -19,6 +19,25 @@ CONCURRENCY = 1 if NPU else max(1, min(3, int(os.getenv('SEPARATION_CONCURRENCY'
 pool = concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENCY)
 app = FastAPI()
 app.add_middleware(UploadGuard)
+cleanup_stop = threading.Event()
+cleanup_thread = None
+@app.on_event('startup')
+def start_cleanup():
+    global cleanup_thread
+    cleanup_stop.clear()
+    def clean():
+        while not cleanup_stop.wait(60):
+            try: jobs.cleanup()
+            except OSError: pass
+    jobs.cleanup(force=True)
+    cleanup_thread = threading.Thread(target=clean, daemon=True, name='result-cleanup')
+    cleanup_thread.start()
+@app.on_event('shutdown')
+def stop_cleanup():
+    cleanup_stop.set()
+    if cleanup_thread: cleanup_thread.join(timeout=5)
+
+
 if NPU:
     from npu_detection import NpuDetection
     detection = NpuDetection()
@@ -30,6 +49,13 @@ def auth(authorization: str = Header(default='')):
     if key and not hmac.compare_digest(authorization, 'Bearer ' + key):
         raise HTTPException(401, 'Invalid key')
 
+
+@app.post('/jobs/{job}/ack', dependencies=[Depends(auth)])
+def acknowledge(job: str):
+    if not job_path(job).is_dir(): raise HTTPException(404, 'Unknown job')
+    try: jobs.acknowledge(job)
+    except ValueError as error: raise HTTPException(409, str(error))
+    return {'ok': True}
 
 def status(job, value):
     jobs.write(job, value)
@@ -70,7 +96,7 @@ async def submit(file: UploadFile = File(...), model: str = Form(...), title: st
         try:
             job, created = jobs.reserve(model, title, idempotency_key)
         except OverflowError:
-            raise HTTPException(429, 'Queue full', headers={'Retry-After':'3'})
+            raise HTTPException(429, '队列已满或工作目录空间不足，请等待回收后重试', headers={'Retry-After':'30'})
         except ValueError as error:
             raise HTTPException(409, str(error))
         if not created:
@@ -125,9 +151,7 @@ def get_job(job: str):
 @app.get('/artifacts/{job}', dependencies=[Depends(auth)])
 def artifact(job: str):
     file = job_path(job) / 'instrumental.wav'
-    if jobs.state(job).get('status') != 'done' or not file.exists():
-        raise HTTPException(404, 'Not ready')
-    return FileResponse(file, media_type='audio/wav')
+    return jobs.file_response(job, file, media_type='audio/wav')
 
 
 if not NPU:

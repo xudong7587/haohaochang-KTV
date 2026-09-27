@@ -104,6 +104,7 @@ export function resourceManifest(store, song, cache) {
 export function canEnqueue(store, song, cache) {
   return (
     !!song &&
+    !store.get("deletion:" + song.id) &&
     !store.get("hidden:" + song.id) &&
     resourceManifest(store, song, cache).playable
   );

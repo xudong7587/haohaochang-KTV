@@ -40,15 +40,13 @@ export function tvPairingApi({
     };
     sessions.set(id, item);
     const url = `${origin}/mobile#pair=${id}.${approvalKey}`;
-    res
-      .set("Cache-Control", "no-store")
-      .json({
-        id,
-        pollKey,
-        code: item.code,
-        expiresIn: 180,
-        qr: await QRCode.toDataURL(url, { width: 280, margin: 2 }),
-      });
+    res.set("Cache-Control", "no-store").json({
+      id,
+      pollKey,
+      code: item.code,
+      expiresIn: 180,
+      qr: await QRCode.toDataURL(url, { width: 280, margin: 2 }),
+    });
   });
   app.post("/api/tv-pairing/:id/check", (req, res) => {
     const item = session(req.params.id);
@@ -71,4 +69,5 @@ export function tvPairingApi({
     item.approved = true;
     res.json({ ok: true });
   });
+  return () => sessions.clear();
 }

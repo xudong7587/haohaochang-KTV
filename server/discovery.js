@@ -1,6 +1,7 @@
 import dgram from "node:dgram";
 import os from "node:os";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHmac } from "node:crypto";
+import { equal } from "./http-utils.js";
 
 export const privateIPv4 = (ip) =>
   /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip) &&
@@ -81,15 +82,48 @@ export function startDiscovery(
       return;
     busy = true;
     try {
+      if (packet.securePairing !== 2)
+        throw new Error("请更新 PC 整理器后在本机确认首次配对");
+      const configured = store.get("ai", {});
+      const clientId = store.get("pc-client-id") || randomUUID();
+      store.set("pc-client-id", clientId);
+      const key = configured.pcApiKey;
+      if (
+        key &&
+        !equal(
+          packet.proof,
+          createHmac("sha256", key)
+            .update(packet.nonce + "\n" + packet.challenge + "\n" + packet.id)
+            .digest("hex"),
+        )
+      )
+        throw new Error(
+          "PC 身份校验失败；如已撤销连接，请清除旧 PC 密钥并重新确认配对",
+        );
       const endpoint = `http://${remote.address}:${packet.port}`;
       const result = await fetcher(endpoint + "/lan/pair", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ challenge: packet.challenge }),
+        body: JSON.stringify({
+          challenge: packet.challenge,
+          clientId,
+          ...(key
+            ? {
+                proof: createHmac("sha256", key)
+                  .update(packet.challenge + "\n" + clientId)
+                  .digest("hex"),
+              }
+            : {}),
+        }),
         signal: AbortSignal.timeout(3000),
         redirect: "error",
       });
-      if (!result.ok) throw new Error("PC 配对暂未完成");
+      if (!result.ok) {
+        const detail = await result.json().catch(() => ({}));
+        throw new Error(
+          String(detail.detail || "PC 配对暂未完成").slice(0, 160),
+        );
+      }
       const paired = await result.json();
       if (stopped) return;
       if (

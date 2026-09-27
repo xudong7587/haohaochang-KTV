@@ -179,6 +179,7 @@ test("LAN discovery pairs only fresh private sender replies and never broadcasts
       port: 8000,
       challenge: "challenge-123456789",
       name: "test PC",
+      securePairing: 2,
     };
     socket.emit(
       "message",

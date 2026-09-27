@@ -242,7 +242,10 @@ export async function refreshVideo(job, payload, context) {
     throw error;
   }
   // Publication is already committed. Cleanup must never abandon the live version.
-  if (result) store.set(result.checkpointKey, null);
+  if (result) {
+    store.set(result.checkpointKey, null);
+    await result.acknowledge?.();
+  }
   // Only disposable input copies belonging to this operation are removed.
   await rm(taskRoot, { recursive: true, force: true }).catch(() => {});
 }

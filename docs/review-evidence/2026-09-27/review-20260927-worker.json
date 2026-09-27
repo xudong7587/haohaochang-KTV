@@ -1,0 +1,23 @@
+{
+  "unauthenticatedUpload": {
+    "status": 401,
+    "multipartTemporaryFiles": 1,
+    "rolledToDisk": true
+  },
+  "automaticPairing": {
+    "status": 200,
+    "arbitraryPrivateSenderReceivesWorkerKey": true
+  },
+  "multiTrackClip": {
+    "status": "done",
+    "inputAudioTracks": 2,
+    "outputAudioTracks": 1
+  },
+  "completedClipRetention": {
+    "inputRemainsAfterRecovery": true,
+    "outputRemainsAfterRecovery": true,
+    "completedDirectories": 13,
+    "pending": 0,
+    "activeCapacity": 10
+  }
+}

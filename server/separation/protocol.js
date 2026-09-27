@@ -297,6 +297,18 @@ export async function runProviderJob(
   return {
     file,
     checkpointKey,
+    async acknowledge() {
+      // Best effort, after local validation; old workers retain their original
+      // protocol. A failed acknowledgement leaves the full retention window.
+      try {
+        await taskFetch(`${config.endpoint}/jobs/${result.id}/ack`, {
+          method: "POST",
+          headers: providerHeaders(config),
+          signal: AbortSignal.timeout(3000),
+          redirect: "error",
+        });
+      } catch {}
+    },
     vocalActivity: result.vocal_activity,
     validated,
   };

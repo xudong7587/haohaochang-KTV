@@ -29,9 +29,11 @@ import { libraryDeleteApi } from "./library-delete.js";
 import { resourceRoot } from "./assets.js";
 import express from "express";
 import path from "node:path";
-import { createHash, randomBytes, scryptSync } from "node:crypto";
+import { randomBytes } from "node:crypto";
+import { createAdminAuth } from "./admin-auth.js";
 import { mkdirSync, existsSync } from "node:fs";
 import { openStore } from "./db.js";
+import { recoverDeletions } from "./song-deletion.js";
 
 import { fail, equal } from "./http-utils.js";
 
@@ -51,40 +53,15 @@ export function createApp(options = {}) {
   const store = openStore(dir),
     { db, get, set } = store;
   store.readOnlyMedia = !!options.readOnlyMedia;
+  if (!store.readOnlyMedia)
+    recoverDeletions(store, [...roots, downloads, cache, legacyCache]);
   const initialAdminToken =
     options.adminToken || process.env.ADMIN_PASSWORD || process.env.ADMIN_TOKEN;
   if (!initialAdminToken || initialAdminToken.length < 6)
     throw new Error("请设置至少 6 位的 ADMIN_PASSWORD（管理密码）");
-  const passwordMatches = (value) => {
-    const saved = get("adminPasswordHash", null);
-    if (!saved) return equal(value, initialAdminToken);
-    if (typeof value !== "string" || !value || !saved.salt || !saved.hash)
-      return false;
-    return equal(scryptSync(value, saved.salt, 64).toString("hex"), saved.hash);
-  };
-  const sessionDigest = (value) =>
-    createHash("sha256").update(value).digest("hex");
-  const cookieName = "ktv_admin_session";
-  const cookieToken = (req) =>
-    req
-      .get("cookie")
-      ?.split(";")
-      .map((part) => part.trim())
-      .find((part) => part.startsWith(cookieName + "="))
-      ?.slice(cookieName.length + 1) || "";
-  const hasSession = (req) => {
-    const sessions = get("adminSessions", []);
-    const value = cookieToken(req);
-    return (
-      !!value &&
-      sessions.some(
-        (session) =>
-          session.expires > Date.now() &&
-          equal(session.digest, sessionDigest(value)),
-      )
-    );
-  };
-  const isAdmin = (req) => hasSession(req) || passwordMatches(token(req));
+  const auth = createAdminAuth(store, initialAdminToken);
+  const { cookieName, cookieToken, hasSession, sessionDigest } = auth;
+  const isAdmin = (req) => req.adminAuthenticated === true;
   const app = express();
   const rooms = createRoomRegistry(store);
   const clients = new Set();
@@ -137,6 +114,19 @@ export function createApp(options = {}) {
     req.roomId = room?.id || LEGACY_ROOM;
     next();
   };
+  app.use("/api", async (req, res, next) => {
+    try {
+      req.adminAuthenticated = await auth.authenticate(
+        req,
+        token(req),
+        !!rooms.byToken(token(req)),
+      );
+      next();
+    } catch (error) {
+      if (error.status === 429) res.set("Retry-After", "60");
+      next(error);
+    }
+  });
   app.use(
     "/api",
     requestLimits({
@@ -145,7 +135,7 @@ export function createApp(options = {}) {
   );
   const events = liveEvents(clients, (roomId) => snapshot(roomId));
   const emit = events.emit;
-  const { snapshot, enqueue, isPlaying } = createRoom({
+  const { snapshot, enqueue, isPlaying, revokePlayers } = createRoom({
     app,
     member,
     store,
@@ -187,6 +177,25 @@ export function createApp(options = {}) {
         (process.env.KTV_DISCOVERY_ENABLED === "1" &&
           process.env.KTV_LOCAL_ONLY !== "1")),
   });
+  function revokeMemberSessions() {
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      set("roomToken", randomBytes(24).toString("hex"));
+      for (const room of db.prepare("SELECT id FROM rooms").all())
+        db.prepare("UPDATE rooms SET token=? WHERE id=?").run(
+          randomBytes(24).toString("hex"),
+          room.id,
+        );
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+    clearPairings();
+    revokePlayers();
+    for (const client of clients) client.end();
+    clients.clear();
+  }
   const routeContext = {
     rooms,
     isPlaying,
@@ -210,21 +219,15 @@ export function createApp(options = {}) {
     enqueue,
     snapshot,
     allowedOrigin,
-    changeAdminPassword(current, next) {
-      if (!passwordMatches(current)) throw fail(401, "当前管理密码不正确");
-      if (typeof next !== "string" || next.length < 6)
-        throw fail(400, "新密码至少需要 6 位");
-      const salt = randomBytes(16).toString("hex");
-      set("adminPasswordHash", {
-        salt,
-        hash: scryptSync(next, salt, 64).toString("hex"),
-      });
-      set("adminSessions", []);
+    async changeAdminPassword(current, next, revoke = true) {
+      await auth.changePassword(current, next);
+      if (revoke) revokeMemberSessions();
     },
+    revokeMemberSessions,
   };
   const resolveReview = reviewsApi(routeContext);
   roomRegistryApi(routeContext);
-  tvPairingApi(routeContext);
+  const clearPairings = tvPairingApi(routeContext);
   libraryApi({ ...routeContext, resolveReview });
   favoriteBundlesApi(routeContext);
   libraryDeleteApi(routeContext);

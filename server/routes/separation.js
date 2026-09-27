@@ -43,7 +43,11 @@ export function separationApi({ app, admin, get, set, db, work, discovery }) {
               ready: true,
               busy: health.busy === true,
               pending: Number(health.pending) || 0,
-              source: c.embedded ? "内置服务" : c.managed ? "本机分离容器" : "已有连接",
+              source: c.embedded
+                ? "内置服务"
+                : c.managed
+                  ? "本机分离容器"
+                  : "已有连接",
               device: String(health.device || "").slice(0, 80),
             };
           } catch {
@@ -55,7 +59,11 @@ export function separationApi({ app, admin, get, set, db, work, discovery }) {
           ready: false,
           busy: false,
           pending: 0,
-          source: choices.some((c) => c.embedded) ? "内置服务" : managedSeparation() ? "本机分离容器" : "已有连接",
+          source: choices.some((c) => c.embedded)
+            ? "内置服务"
+            : managedSeparation()
+              ? "本机分离容器"
+              : "已有连接",
           message:
             kind === "pc"
               ? "尚未连接，请启动同一网络的 PC 整理器"
@@ -68,7 +76,10 @@ export function separationApi({ app, admin, get, set, db, work, discovery }) {
     return {
       config: configuration(),
       providers,
-      discovery: { enabled: !!discovery.info().enabled },
+      discovery: {
+        enabled: !!discovery.info().enabled,
+        message: discovery.info().message,
+      },
     };
   };
   app.get("/api/admin/separation", admin, async (req, res) => {

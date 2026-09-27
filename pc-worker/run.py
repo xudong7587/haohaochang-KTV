@@ -83,7 +83,11 @@ print('Keep this window open. Configuration: worker.json')
 print('First separation downloads the model. Close this window to stop.\n')
 import app as worker_app
 from lan import register as register_lan
-register_lan(worker_app.app, config)
+def persist_worker_config():
+    temporary = config_file.with_suffix('.tmp')
+    temporary.write_text(json.dumps(config, indent=2), encoding='utf-8')
+    temporary.replace(config_file)
+register_lan(worker_app.app, config, persist=persist_worker_config)
 from desktop import register
 server = uvicorn.Server(uvicorn.Config(worker_app.app, host=host, port=int(config['port'])))
 register(worker_app.app, root, config, plan, device, lambda: setattr(server, 'should_exit', True))

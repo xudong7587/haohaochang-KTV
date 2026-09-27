@@ -67,7 +67,8 @@ def register(app, root, config, plan, device, stop=lambda: None):
     @app.get('/desktop/status', dependencies=[Depends(auth)])
     def dashboard():
         jobs = []
-        files = sorted(ROOT.glob('*/state.json'), key=lambda p: p.stat().st_mtime, reverse=True)
+        with job_store.lock:
+            files = sorted(ROOT.glob('*/state.json'), key=lambda p: p.stat().st_mtime, reverse=True)
         finished_count = 0
         for file in files:
             try:

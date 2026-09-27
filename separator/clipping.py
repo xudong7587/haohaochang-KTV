@@ -6,7 +6,6 @@ import hashlib
 import threading
 import time
 from fastapi import Depends, File, Form, Header, HTTPException, UploadFile
-from fastapi.responses import FileResponse
 from video_encoding import encoder_plans, video_filter
 
 
@@ -55,7 +54,7 @@ def execute_clip(jobs, job, start, end, video_only=False, video_height=1080, vid
             if video_only:
                 command += ['-an', '-vf', video_filter(video_transfer), '-pix_fmt', 'yuv420p']
             else:
-                command += ['-map', '0:a:0', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k']
+                command += ['-map', '0:a', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k']
                 if video_transfer: command += ['-vf', video_filter(video_transfer)]
             if video_transfer: command += ['-color_trc', 'bt709', '-color_primaries', 'bt709', '-colorspace', 'bt709']
             encoders = encoder_plans(command[0], video_height, video_fps, video_only)
@@ -115,7 +114,7 @@ def register(app, auth, jobs, pool, job_path):
             try:
                 job, created = jobs.reserve(f'{"video" if video_only else "clip"}:{start}:{end}', title, idempotency_key)
             except OverflowError:
-                raise HTTPException(429, 'Queue full')
+                raise HTTPException(429, '队列已满或工作目录空间不足，请等待回收后重试')
             except ValueError as error:
                 raise HTTPException(409, str(error))
             if not created:
@@ -148,6 +147,4 @@ def register(app, auth, jobs, pool, job_path):
     @app.get('/clip-artifacts/{job}', dependencies=[Depends(auth)])
     def artifact(job: str):
         file = job_path(job) / 'clip.mp4'
-        if jobs.state(job).get('status') != 'done' or not file.is_file():
-            raise HTTPException(404, 'Not ready')
-        return FileResponse(file, media_type='video/mp4')
+        return jobs.file_response(job, file, media_type='video/mp4')

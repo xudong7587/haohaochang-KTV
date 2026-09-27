@@ -138,9 +138,11 @@ function createScopedRoom({
       name = clean(req.body.name, 24) || "家人";
     let song = db.prepare("SELECT * FROM songs WHERE id=?").get(id);
     if (!song) throw fail(404, "歌曲不存在");
+    if (get("deletion:" + id)) throw fail(409, "歌曲正在删除，请稍后刷新");
     if (get("package-ready:" + id) && get("package:" + id))
       await inspectPackage(store, song, get("package:" + id));
     song = db.prepare("SELECT * FROM songs WHERE id=?").get(id);
+    if (!song || get("deletion:" + id)) throw fail(409, "歌曲正在删除或已删除");
     if (get("hidden:" + id)) throw fail(409, "歌曲已隐藏，请在后台恢复后点歌");
     if (song.status === "ready" && !canEnqueue(store, song, cache))
       throw fail(409, "播放文件缺失，请先在后台重新整理");
@@ -336,6 +338,10 @@ function createScopedRoom({
   return {
     snapshot,
     enqueue,
+    revoke: () => {
+      playerLease.revoke();
+      emit();
+    },
     isPlaying: (id) => playerLease.snapshot() && ambient?.song_id === id,
   };
 }
@@ -373,5 +379,8 @@ export function createRoom(options) {
     snapshot: (roomId) => scope(roomId).snapshot(),
     enqueue: (id, name, roomId) => scope(roomId).enqueue(id, name),
     isPlaying: (id) => [...scopes.values()].some((room) => room.isPlaying(id)),
+    revokePlayers: () => {
+      for (const room of scopes.values()) room.revoke();
+    },
   };
 }

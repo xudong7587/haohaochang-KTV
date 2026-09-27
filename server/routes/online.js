@@ -90,9 +90,9 @@ export function onlineApi({
   app.get("/api/requests/status", member, (req, res) => {
     const rows = db
       .prepare(
-        "SELECT id,kind,status,stage,payload,created FROM jobs WHERE status IN ('running','queued','waiting-worker') AND json_extract(payload,'$.priority') IN ('mobile','online') ORDER BY CASE status WHEN 'running' THEN 0 WHEN 'waiting-worker' THEN 1 ELSE 2 END, created",
+        "SELECT id,kind,status,stage,payload,created FROM jobs WHERE (status IN ('running','queued','waiting-worker') OR (status IN ('failed','review') AND COALESCE(finished,created)>?)) AND json_extract(payload,'$.priority') IN ('mobile','online') ORDER BY CASE status WHEN 'running' THEN 0 WHEN 'waiting-worker' THEN 1 WHEN 'queued' THEN 2 ELSE 3 END, CASE WHEN status IN ('failed','review') THEN -created ELSE created END",
       )
-      .all();
+      .all(Date.now() - 86400000);
     const progress = new Map(taskStatus(store).map((row) => [row.id, row]));
     res.set("Cache-Control", "no-store").json(
       rows

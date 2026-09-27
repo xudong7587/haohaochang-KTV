@@ -274,6 +274,7 @@ export async function encodePicture(
         },
       });
       store.set(prepared.checkpointKey, null);
+      await prepared.acknowledge?.();
       return;
     }
     await encodePackageResource(
