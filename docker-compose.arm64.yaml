@@ -35,7 +35,7 @@ services:
   # 2. CPU 人声分离
   separator-cpu:
     # 分离镜像版本已固定，无需随主程序升级修改。
-    image: ghcr.io/xudong7587/haohaochang-separator:1.0.8@sha256:c69112be880d34c31c1366657da5743a4594121428596822036a4b61029ac2d7
+    image: ghcr.io/xudong7587/haohaochang-separator:runtime-1.0.9@sha256:4f4ffdf892f682cf611fc1bc060aa6b3bd8af1f9abecae5e3d99e113fb463707
     volumes:
       # 【同步目录】冒号左边必须与上面 ktv 的 /data 映射相同。
       - "./data:/data"

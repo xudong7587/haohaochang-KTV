@@ -55,6 +55,15 @@ $exitItem = $menu.Items.Add('退出整理器')
 $tray.ContextMenuStrip = $menu
 $script:firstTick = $true; $script:queuedAction = $null; $script:leaving = $false; $script:request = $null; $script:action = ''; $script:latest = ''; $script:phase = ''; $script:failures = 0; $script:retryAt = 0
 function Show-Organizer { $form.Show(); $form.WindowState = 'Normal'; $form.Activate() }
+function Refresh-WorkerCredential {
+  try {
+    $next = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'worker.json') -Raw | ConvertFrom-Json
+    if ($next.key -and $next.key -ne $script:config.key) {
+      $script:config = $next
+      $client.DefaultRequestHeaders.Authorization = New-Object Net.Http.Headers.AuthenticationHeaderValue('Bearer', $next.key)
+    }
+  } catch { }
+}
 function Request-Action($action, $body = '{}') {
   if ($script:request) { $script:queuedAction = @($action,$body); $updateLabel.Text = '等待当前状态请求完成…'; return }
   $script:action = $action
@@ -114,6 +123,7 @@ $timer.Add_Tick({
       if ($script:failures -gt 80) { $script:leaving = $true; $form.Close() }
     } finally { $script:request = $null; $script:nextPoll = [DateTime]::Now.AddSeconds(3) }
   }
+  if (!$script:request) { Refresh-WorkerCredential }
   if (!$script:request -and $script:queuedAction) { $queued = $script:queuedAction; $script:queuedAction = $null; Request-Action $queued[0] $queued[1] }
   if (!$script:request -and [DateTime]::Now -gt $script:nextPoll) { $script:action = 'status'; $script:request = $client.GetAsync("$base/desktop/status") }
 })

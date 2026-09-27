@@ -2,6 +2,10 @@
 
 已确认 7 项缺陷或安全缺口，其中 2 项 P1、5 项 P2；另列 1 项用户反馈改进建议。最先应处理歌曲删除与点播的并发冲突，以及 PC 自动配对的设备信任边界。以下保留 v1.1.4 审查时的证据；A01–A07 及手机反馈项已在 v1.1.5 修复分支实现，回归测试见 tests/security-regressions.test.js、separator/test_protocol.py、pc-worker/test_lan.py。历史复现脚本仅适用于原审查基线，不作为新版通过标准。
 
+## 修复验证补记
+
+v1.1.5 修复后的 Node 测试 245 项通过、1 项平台跳过；Python 协议 20 项通过，LAN 2 项通过，额外的并发、NPU 协议与更新测试通过。Edge 下已验证二维码配对、播放权接管与撤销、PC 独立页面和 NAS PC 面板。重新完成 npm 全量依赖审计，未报告已知漏洞，见 [新版审计 JSON](review-evidence/2026-09-27/npm-audit-v1.1.5.json)。下文测试数量、超时与缺陷表现为原 v1.1.4 审查记录。
+
 ## 审查基线与范围
 
 - GitHub `origin/main`、本地标准版 HEAD、`v1.1.4` 标签解引用均为 `f255ff962adffb6ccb464ba0b2505aa07849c6f8`。已执行 fetch 核对；[正式 Release](https://github.com/xudong7587/haohaochang-KTV/releases/tag/v1.1.4) 发布于 2026-09-24。

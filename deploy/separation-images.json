@@ -1,14 +1,19 @@
 {
   "cpu": {
     "image": "ghcr.io/xudong7587/haohaochang-separator",
-    "version": "1.0.8",
-    "digest": "sha256:c69112be880d34c31c1366657da5743a4594121428596822036a4b61029ac2d7",
-    "architectures": ["amd64", "arm64"]
+    "version": "runtime-1.0.9",
+    "digest": "sha256:4f4ffdf892f682cf611fc1bc060aa6b3bd8af1f9abecae5e3d99e113fb463707",
+    "architectures": [
+      "amd64",
+      "arm64"
+    ]
   },
   "npu": {
     "image": "ghcr.io/xudong7587/haohaochang-separator-npu",
-    "version": "1.0.8",
-    "digest": "sha256:767dfd6f490aa2c0fcbe372acf0bfe415270d523a0df1a06dd7b577070ed377d",
-    "architectures": ["amd64"]
+    "version": "runtime-1.0.9",
+    "digest": "sha256:c04ca5be152168eca9259a183deba157d65737200bf610125e5d40fbc1d480ff",
+    "architectures": [
+      "amd64"
+    ]
   }
 }

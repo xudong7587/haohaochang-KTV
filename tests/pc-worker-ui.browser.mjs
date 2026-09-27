@@ -54,7 +54,25 @@ app.post("/desktop/update/:action", (q, r) => {
   }
   r.json(update);
 });
-app.get("/desktop/status", (req, res) =>
+let pendingPairs = [
+  { id: "pair-fixture", address: "192.168.1.10", code: "123456" },
+];
+let approvedPair = "",
+  revoked = false,
+  statusKey = "";
+app.post("/lan/approve", (req, res) => {
+  assert.equal(req.headers.authorization, "Bearer fixture-key");
+  approvedPair = req.body.id;
+  pendingPairs = [];
+  res.json({ ok: true });
+});
+app.post("/lan/revoke", (req, res) => {
+  assert.equal(req.headers.authorization, "Bearer fixture-key");
+  revoked = true;
+  res.json({ ok: true, key: "rotated-fixture-key" });
+});
+app.get("/desktop/status", (req, res) => {
+  statusKey = req.headers.authorization;
   res.json({
     version: "0.3.10",
     update,
@@ -65,9 +83,9 @@ app.get("/desktop/status", (req, res) =>
     runtime: "test",
     segment: 7,
     addresses: [],
-    lan: { enabled: false },
-  }),
-);
+    lan: { enabled: false, pending: pendingPairs },
+  });
+});
 app.get("/icon.svg", (req, res) =>
   res.type("svg").send('<svg xmlns="http://www.w3.org/2000/svg"/>'),
 );
@@ -85,11 +103,21 @@ try {
     "http://127.0.0.1:" + server.address().port + "/#fixture-key",
   );
   await page.locator(".task-item").waitFor();
-  for (const name of ["检查更新", "安装新版", "取消更新"]) assert.equal(await page.getByRole("button", { name, exact: true }).count(), 0);
+  for (const name of ["检查更新", "安装新版", "取消更新"])
+    assert.equal(
+      await page.getByRole("button", { name, exact: true }).count(),
+      0,
+    );
   assert.equal(checks, 0);
   update = { phase: "failed", error: "403 Forbidden" };
-  await page.getByRole("status").filter({hasText:"应用内更新已暂停"}).waitFor();
-  assert.equal(await page.getByText("403 Forbidden", {exact:true}).count(), 0);
+  await page
+    .getByRole("status")
+    .filter({ hasText: "应用内更新已暂停" })
+    .waitFor();
+  assert.equal(
+    await page.getByText("403 Forbidden", { exact: true }).count(),
+    0,
+  );
   assert.equal(await page.locator(".task-item").count(), 1);
   await page.getByRole("button", { name: /排队等待 · 75 项/ }).click();
   assert.equal(await page.locator(".task-item").count(), 11);
@@ -107,6 +135,18 @@ try {
     [390, 390],
   );
   await page.screenshot({ path: "test-results/pc-workbench-mobile.png" });
+  await page.getByRole("button", { name: /配对码 123456/ }).click();
+  assert.equal(approvedPair, "pair-fixture");
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.locator("#revokePairs").click();
+  await page.getByText("旧密钥已撤销，请重新配对", { exact: true }).waitFor();
+  await page.waitForFunction(
+    () => sessionStorage.getItem("resourceAIKey") === "rotated-fixture-key",
+  );
+  assert.ok(revoked);
+  for (let n = 0; n < 50 && statusKey !== "Bearer rotated-fixture-key"; n++)
+    await page.waitForTimeout(100);
+  assert.equal(statusKey, "Bearer rotated-fixture-key");
   console.log(
     "PC standalone workspace passed: 156 jobs, grouped collapse, ten-row pagination, mobile width",
   );
