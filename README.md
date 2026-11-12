@@ -2,7 +2,7 @@
 
 把曲库放在家里的 NAS，打开电视、手机或平板，就能点歌开唱。好好唱把歌曲整理、伴奏制作和多端播放接在一起，日常使用不必反复搬文件。
 
-[下载最新版本](https://github.com/xudong7587/haohaochang-KTV/releases/latest) · [使用手册](docs/USER-GUIDE.md) · [更新记录](CHANGELOG.md)
+[下载最新版本](https://github.com/xudong7587/haohaochang-KTV/releases/latest) · [使用手册](docs/USER-GUIDE.md) · [更新记录](CHANGELOG.md) · [请作者喝杯咖啡](#support)
 
 ## 项目亮点
 
@@ -72,6 +72,16 @@ Android 电视、手机和平板使用同一份 `haohaochang-tv-v1.1.5.apk`。�
 请从 Release 手动下载更新。
 
 开发者入口：[开发说明](docs/DEVELOPMENT.md) · [当前实现](docs/PROJECT-STATUS.md) · [验证记录](docs/VALIDATION.md)。
+
+
+<a id="support"></a>
+
+## 请作者喝杯咖啡
+
+如果好好唱让你的家庭欢唱时光更开心，欢迎请作者喝杯咖啡，支持持续打磨。感谢每一份心意。
+
+<p align="center"><img src="docs/assets/support-wechat.png" width="320" alt="微信扫码支持好好唱作者"></p>
+<p align="center">微信扫一扫 · 自愿支持，量力而行</p>
 
 ## 免责声明与使用边界
 
