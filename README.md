@@ -2,7 +2,7 @@
 
 把曲库放在家里的 NAS，打开电视、手机或平板，就能点歌开唱。好好唱把歌曲整理、伴奏制作和多端播放接在一起，日常使用不必反复搬文件。
 
-[下载最新版本](https://github.com/xudong7587/haohaochang-KTV/releases/latest) · [使用手册](docs/USER-GUIDE.md) · [更新记录](CHANGELOG.md) · [请作者喝杯咖啡](#support)
+[官方网站](https://dunn.fun/haohaochang/) · [下载最新版本](https://github.com/xudong7587/haohaochang-KTV/releases/latest) · [使用手册](docs/USER-GUIDE.md) · [更新记录](CHANGELOG.md) · [请作者喝杯咖啡](#support)
 
 ## 项目亮点
 
