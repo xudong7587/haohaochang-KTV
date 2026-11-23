@@ -1,0 +1,371 @@
+{
+  "materials": [
+    {
+      "id": "soft",
+      "name": "柔软浮雕"
+    },
+    {
+      "id": "clear",
+      "name": "清晰默认"
+    },
+    {
+      "id": "paper",
+      "name": "纸页档案"
+    },
+    {
+      "id": "linen",
+      "name": "亚麻织纹"
+    },
+    {
+      "id": "glass",
+      "name": "iOS 玻璃"
+    },
+    {
+      "id": "frosted",
+      "name": "雾面玻璃"
+    },
+    {
+      "id": "aurora",
+      "name": "极光玻璃"
+    },
+    {
+      "id": "duotone",
+      "name": "双色渐层"
+    },
+    {
+      "id": "satin",
+      "name": "缎光瓷面"
+    },
+    {
+      "id": "outline",
+      "name": "精致描边"
+    },
+    {
+      "id": "metal",
+      "name": "拉丝金属"
+    },
+    {
+      "id": "clay",
+      "name": "陶土哑光"
+    },
+    {
+      "id": "marble",
+      "name": "大理石"
+    },
+    {
+      "id": "neon",
+      "name": "霓虹暗夜"
+    },
+    {
+      "id": "cutout",
+      "name": "纸片拼贴"
+    },
+    {
+      "id": "mesh",
+      "name": "雾面色场"
+    }
+  ],
+  "colors": [
+    {
+      "id": "blue",
+      "name": "晴蓝",
+      "light": "#376bd8",
+      "dark": "#9dbbff"
+    },
+    {
+      "id": "celadon",
+      "name": "青瓷",
+      "light": "#2f7f76",
+      "dark": "#8fd6c9"
+    },
+    {
+      "id": "green",
+      "name": "松绿",
+      "light": "#188466",
+      "dark": "#7fd3b0"
+    },
+    {
+      "id": "violet",
+      "name": "鸢紫",
+      "light": "#8855cc",
+      "dark": "#c0a4f5"
+    },
+    {
+      "id": "rose",
+      "name": "莓红",
+      "light": "#c34278",
+      "dark": "#f0a3bf"
+    },
+    {
+      "id": "brick",
+      "name": "砖窑",
+      "light": "#a8433a",
+      "dark": "#eda79e"
+    },
+    {
+      "id": "amber",
+      "name": "琥珀",
+      "light": "#b27a16",
+      "dark": "#ebc078"
+    },
+    {
+      "id": "mustard",
+      "name": "芥末",
+      "light": "#8f7a12",
+      "dark": "#ddc66a"
+    },
+    {
+      "id": "indigo",
+      "name": "靛蓝",
+      "light": "#3b4fa8",
+      "dark": "#a9b6f0"
+    },
+    {
+      "id": "slate",
+      "name": "石墨",
+      "light": "#61758f",
+      "dark": "#b2c1d4"
+    },
+    {
+      "id": "catppuccin",
+      "name": "奶霜花园",
+      "light": [
+        "#c14f7c",
+        "#179299",
+        "#d20f39"
+      ],
+      "dark": [
+        "#f0acc7",
+        "#94e2d5",
+        "#f5c2e7"
+      ]
+    },
+    {
+      "id": "nord",
+      "name": "北境极光",
+      "light": [
+        "#427fa4",
+        "#5e678d",
+        "#42776c"
+      ],
+      "dark": [
+        "#88c0d0",
+        "#b48ead",
+        "#a3be8c"
+      ]
+    },
+    {
+      "id": "iris",
+      "name": "鸢尾暮色",
+      "light": [
+        "#7958c8",
+        "#b34379",
+        "#22778a"
+      ],
+      "dark": [
+        "#b7a5ff",
+        "#f3a6ce",
+        "#79d1de"
+      ]
+    },
+    {
+      "id": "deepsea",
+      "name": "深海鎏金",
+      "light": [
+        "#1d6f8b",
+        "#b4892f",
+        "#4c5d8a"
+      ],
+      "dark": [
+        "#7fd2e8",
+        "#ecd08a",
+        "#a9b6e0"
+      ]
+    },
+    {
+      "id": "coast",
+      "name": "海盐日落",
+      "light": [
+        "#14869a",
+        "#b64d38",
+        "#866519"
+      ],
+      "dark": [
+        "#79d5e5",
+        "#ffaf98",
+        "#edcf86"
+      ]
+    },
+    {
+      "id": "lava",
+      "name": "暮色熔岩",
+      "light": [
+        "#b4465e",
+        "#7a4c93",
+        "#d97a3d"
+      ],
+      "dark": [
+        "#f2a5b2",
+        "#c3a6ea",
+        "#f6c39a"
+      ]
+    },
+    {
+      "id": "macaron",
+      "name": "马卡龙",
+      "light": [
+        "#329383",
+        "#9461ac",
+        "#b35a70"
+      ],
+      "dark": [
+        "#a7dfd0",
+        "#dab6ef",
+        "#f4bacb"
+      ]
+    },
+    {
+      "id": "cedar",
+      "name": "薄荷雪松",
+      "light": [
+        "#2e8b74",
+        "#8fa06a",
+        "#c9a227"
+      ],
+      "dark": [
+        "#9fe0c9",
+        "#cfd9a8",
+        "#ecd08a"
+      ]
+    },
+    {
+      "id": "peach",
+      "name": "蜜桃乌龙",
+      "light": [
+        "#c16648",
+        "#7e6541",
+        "#6b7d49"
+      ],
+      "dark": [
+        "#f5b79d",
+        "#e2cb9d",
+        "#c8d7a7"
+      ]
+    },
+    {
+      "id": "lavender",
+      "name": "蓝调花雾",
+      "light": [
+        "#467fb2",
+        "#7758a6",
+        "#9b586e"
+      ],
+      "dark": [
+        "#a5c7e8",
+        "#c9b4ef",
+        "#e8b4c7"
+      ]
+    },
+    {
+      "id": "mist",
+      "name": "海雾晨光",
+      "light": [
+        "#4f7fa8",
+        "#8fb9c9",
+        "#d9a98a"
+      ],
+      "dark": [
+        "#a9cbe8",
+        "#cfe6ec",
+        "#f0cfb4"
+      ]
+    },
+    {
+      "id": "forest",
+      "name": "雨后花园",
+      "light": [
+        "#3d895f",
+        "#8a6532",
+        "#625eaa"
+      ],
+      "dark": [
+        "#9bd0af",
+        "#dfc392",
+        "#bdb8ef"
+      ]
+    },
+    {
+      "id": "honey",
+      "name": "蜂蜜麦田",
+      "light": [
+        "#a17a24",
+        "#397976",
+        "#ad6556"
+      ],
+      "dark": [
+        "#e4c278",
+        "#9dcfcb",
+        "#e5b0a3"
+      ]
+    },
+    {
+      "id": "oasis",
+      "name": "沙漠绿洲",
+      "light": [
+        "#b07a2e",
+        "#4e8a6b",
+        "#8a5a3c"
+      ],
+      "dark": [
+        "#eccd94",
+        "#a8d4b6",
+        "#d5ad8c"
+      ]
+    },
+    {
+      "id": "ruby",
+      "name": "红茶玫瑰",
+      "light": [
+        "#c04757",
+        "#567647",
+        "#9b742e"
+      ],
+      "dark": [
+        "#ee9aa5",
+        "#b5cda4",
+        "#dfc48a"
+      ]
+    },
+    {
+      "id": "nightviolet",
+      "name": "紫罗兰夜",
+      "light": [
+        "#6c4ab6",
+        "#c05a8e",
+        "#2f8fa8"
+      ],
+      "dark": [
+        "#bfa6f5",
+        "#f0a8c2",
+        "#8fd8e6"
+      ]
+    }
+  ],
+  "corners": [
+    {
+      "id": "tight",
+      "name": "紧致",
+      "scale": 0.42
+    },
+    {
+      "id": "default",
+      "name": "标准",
+      "scale": 1
+    },
+    {
+      "id": "round",
+      "name": "圆润",
+      "scale": 1.9
+    }
+  ]
+}

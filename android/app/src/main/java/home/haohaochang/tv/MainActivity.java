@@ -40,6 +40,7 @@ public final class MainActivity extends Activity {
   private boolean destroyed, resumed;
   private int generation;
   private long exitPressedAt;
+  private final AppUpdater updater = new AppUpdater(this);
   private final Handler handler = new Handler(Looper.getMainLooper());
   private final ExecutorService executor = Executors.newFixedThreadPool(2);
 
@@ -417,6 +418,10 @@ public final class MainActivity extends Activity {
           public void cancel() {
             connect(preferences.getString("server", server));
           }
+
+          public void update() {
+            updater.check();
+          }
         },
         title,
         description);
@@ -472,17 +477,18 @@ public final class MainActivity extends Activity {
     new AlertDialog.Builder(this)
         .setTitle((room == null ? "好好唱设置" : room.roomName()) + " · " + BuildConfig.VERSION_NAME)
         .setItems(
-            new String[] {"重试当前播放", "播放信息", "返回家庭默认歌房", "连接设置", "重新自动发现", "退出歌房登录", "独立歌房 / 输入号码加入"},
+            new String[] {"检查更新", "重试当前播放", "播放信息", "返回家庭默认歌房", "连接设置", "重新自动发现", "退出歌房登录", "独立歌房 / 输入号码加入"},
             (d, w) -> {
-              if (w == 0 && room != null) room.retry();
-              else if (w == 1 && room != null) room.diagnostics();
-              else if (w == 2) connect(server);
-              else if (w == 3) settings();
-              else if (w == 4) discover();
-              else if (w == 5) {
+              if (w == 0) updater.check();
+              else if (w == 1 && room != null) room.retry();
+              else if (w == 2 && room != null) room.diagnostics();
+              else if (w == 3) connect(server);
+              else if (w == 4) settings();
+              else if (w == 5) discover();
+              else if (w == 6) {
                 preferences.edit().remove("token:" + server).apply();
                 connect(server);
-              } else if (w == 6) {
+              } else if (w == 7) {
                 reset();
                 connectionApi = new RoomApi(server, preferences.getString("token:" + server, ""));
                 chooseRoom(connectionApi);
@@ -539,6 +545,7 @@ public final class MainActivity extends Activity {
     resumed = true;
     immersive();
     if (room != null) room.foreground(true);
+    updater.resume();
   }
 
   @Override
@@ -551,6 +558,7 @@ public final class MainActivity extends Activity {
   @Override
   protected void onDestroy() {
     destroyed = true;
+    updater.destroy();
     reset();
     executor.shutdownNow();
 

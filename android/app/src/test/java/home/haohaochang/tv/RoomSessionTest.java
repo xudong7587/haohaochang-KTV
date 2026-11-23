@@ -9,11 +9,13 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.RuntimeEnvironment;
 import org.robolectric.Shadows;
 import org.robolectric.annotation.Config;
 
@@ -66,6 +68,41 @@ public class RoomSessionTest {
                         "id", entry, "song_id", entry, "duration", 20, "lyrics", "[00:00]歌词")),
         "playback",
         RoomApi.object("paused", false));
+  }
+
+  @Test
+  public void microphoneTicketUsesThePrivateHeartbeatKey() throws Exception {
+    Events events = new Events();
+    AtomicReference<String> heartbeatKey = new AtomicReference<>();
+    AtomicReference<String> receiverKey = new AtomicReference<>();
+    CountDownLatch ticketRequested = new CountDownLatch(1);
+    try (LocalNas nas = new LocalNas((path, headers, body) -> {
+          if (path.equals("/api/player/heartbeat")) {
+            JSONObject heartbeat = new JSONObject(body);
+            heartbeatKey.set(heartbeat.getString("micKey"));
+            return new LocalNas.Reply(200, RoomApi.object(
+                "owner", RoomApi.object("id", heartbeat.getString("id"), "revision", 1)).toString());
+          }
+          if (path.equals("/api/mic/ticket")) {
+            JSONObject ticket = new JSONObject(body);
+            if (ticket.optString("role").equals("receiver")) receiverKey.set(ticket.optString("micKey"));
+            ticketRequested.countDown();
+            return new LocalNas.Reply(404, "{}");
+          }
+          return new LocalNas.Reply(200, state("").toString());
+        });
+        RoomSession session = new RoomSession(new RoomApi(nas.origin(), "token"), events);
+        NativeMicrophone microphone = new NativeMicrophone(
+            RuntimeEnvironment.getApplication(), session.api, session.playerId, session.micKey)) {
+      session.start();
+      drain();
+      assertTrue(events.allowed);
+      microphone.active(true);
+      assertTrue(ticketRequested.await(2, TimeUnit.SECONDS));
+      String key = heartbeatKey.get();
+      assertTrue(key != null && key.matches("[a-f0-9]{32}"));
+      assertTrue("receiver must use the same private key sent with its lease", key.equals(receiverKey.get()));
+    }
   }
 
   @Test

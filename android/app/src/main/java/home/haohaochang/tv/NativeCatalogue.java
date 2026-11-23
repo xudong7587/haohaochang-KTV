@@ -2,6 +2,8 @@ package home.haohaochang.tv;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
+import android.graphics.Color;
 import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -33,6 +35,7 @@ import org.json.JSONObject;
 /** Recycled native grid. Decode thumbnails off the UI thread with a bounded bitmap cache. */
 final class NativeCatalogue extends LinearLayout implements AutoCloseable {
   private final Activity activity;
+  private final Context skin;
   private final RoomSession session;
   private final GridView grid;
   private final TextView heading, empty, description, breadcrumb;
@@ -56,6 +59,7 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
       };
   private JSONArray rows = new JSONArray();
   private String page = "songs", artist = "", tag = "", queueKey = "";
+  private String playlistEntry = "";
   private int generation, onlinePage = 1;
   private boolean closed;
   private final Button more;
@@ -64,6 +68,8 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
   private boolean randomOrder;
   private final LinearLayout query;
   private final LinearLayout results, catalogueTools;
+  private final LinearLayout playlistTools;
+  private final Button[] randomButtons = new Button[3];
   private final LinearLayout progressRow;
   private final TextView progressLabel;
   private final ProgressBar progressBar;
@@ -71,46 +77,52 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
   private boolean exactSearch;
   private int keyboardColumns = 4;
   private int selectedPosition;
+  private int songCoverHeight;
   private final LinearLayout initialsPanel;
   private final TextView initialLabel;
   private final java.util.List<Button> initialButtons = new java.util.ArrayList<>();
   private String initialQuery = "";
 
   NativeCatalogue(Activity activity, RoomSession session) {
-    super(activity);
+    this(activity, session, activity);
+  }
+
+  NativeCatalogue(Activity activity, RoomSession session, Context skin) {
+    super(skin);
     this.activity = activity;
     this.session = session;
+    this.skin = skin;
     setOrientation(VERTICAL);
     setBackgroundColor(android.graphics.Color.TRANSPARENT);
     setPadding(dp(24), dp(16), dp(20), dp(12));
-    breadcrumb = TvStyle.text(activity, "我的客厅    /    家庭 KTV", 9, TvStyle.MUTED);
+    breadcrumb = TvStyle.text(skin, "我的客厅    /    家庭 KTV", 9, TvStyle.MUTED);
     addView(breadcrumb, new LayoutParams(-1, dp(24)));
-    heading = TvStyle.text(activity, "今晚，唱点开心的。", 26, TvStyle.INK);
+    heading = TvStyle.text(skin, "今晚，唱点开心的。", 26, TvStyle.INK);
     heading.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
     addView(heading, new LayoutParams(-1, dp(42)));
-    description = TvStyle.text(activity, "一首熟悉的旋律，一屋子喜欢的人。", 12, TvStyle.MUTED);
+    description = TvStyle.text(skin, "一首熟悉的旋律，一屋子喜欢的人。", 12, TvStyle.MUTED);
     addView(description, new LayoutParams(-1, dp(28)));
     query = new LinearLayout(activity);
     query.setGravity(Gravity.CENTER_VERTICAL);
     addView(query, new LayoutParams(-1, dp(46)));
-    search = new EditText(activity);
+    search = new EditText(skin);
     search.setSingleLine();
     search.setTextSize(16);
-    search.setTextColor(TvStyle.INK);
-    search.setHintTextColor(TvStyle.MUTED);
+    TvStyle.textColor(search, TvStyle.INK);
+    search.setHintTextColor(TvStyle.color(skin, TvStyle.MUTED));
     search.setHint("歌名 / 歌手 / 拼音首字母");
-    search.setBackground(TvStyle.focus(activity));
+    search.setBackground(TvStyle.focus(skin));
     search.setContentDescription("搜索歌名或歌手");
     search.setPadding(dp(12), 0, dp(12), 0);
     search.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
     query.addView(search, new LayoutParams(0, -1, 1));
-    find = TvStyle.button(activity, "搜索", "搜索", this::search);
+    find = TvStyle.button(skin, "搜索", "搜索", this::search);
     LayoutParams findParams = new LayoutParams(dp(72), -1);
     findParams.leftMargin = dp(10);
     query.addView(find, findParams);
     sort =
         TvStyle.button(
-            activity,
+            skin,
             "歌名排序",
             "切换歌名排序或随机",
             () -> {
@@ -129,18 +141,36 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
         });
     progressRow = new LinearLayout(activity);
     progressRow.setGravity(Gravity.CENTER_VERTICAL);
-    progressLabel = TvStyle.text(activity, "", 11, TvStyle.MUTED);
+    progressLabel = TvStyle.text(skin, "", 11, TvStyle.MUTED);
     progressLabel.setSingleLine();
     progressLabel.setEllipsize(TextUtils.TruncateAt.END);
     progressBar = new ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal);
     progressBar.setMax(100);
-    progressBar.setProgressTintList(ColorStateList.valueOf(TvStyle.ACCENT));
+    progressBar.setProgressTintList(ColorStateList.valueOf(TvStyle.color(skin, TvStyle.ACCENT)));
     progressRow.addView(progressLabel, new LayoutParams(0, -1, 1));
     progressRow.addView(progressBar, new LayoutParams(dp(100), dp(10)));
     progressRow.setContentDescription("当前找歌进度");
     addView(progressRow, new LayoutParams(-1, dp(28)));
     progressRow.setVisibility(GONE);
-    grid = new GridView(activity);
+    songCoverHeight = dp(102);
+    grid = new GridView(activity) {
+      @Override
+      protected void onMeasure(int widthSpec, int heightSpec) {
+        int coverHeight = dp(102);
+        if (!compact && (page.equals("songs") || page.equals("my-playlist"))
+            && MeasureSpec.getMode(heightSpec) == MeasureSpec.EXACTLY) {
+          int viewport = MeasureSpec.getSize(heightSpec) - getPaddingTop() - getPaddingBottom();
+          int rowHeight = (viewport - getVerticalSpacing()) / 2;
+          int captionHeight = dp(5) + dp(7) + dp(30) + dp(22) + dp(22);
+          coverHeight = Math.max(dp(48), Math.min(coverHeight, rowHeight - captionHeight));
+        }
+        if (coverHeight != songCoverHeight) {
+          songCoverHeight = coverHeight;
+          adapter.notifyDataSetChanged();
+        }
+        super.onMeasure(widthSpec, heightSpec);
+      }
+    };
     grid.setId(View.generateViewId());
     grid.setFocusable(true);
     grid.setFocusableInTouchMode(true);
@@ -171,7 +201,7 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
     initialsPanel.setOrientation(VERTICAL);
     initialsPanel.setPadding(0, dp(14), dp(14), 0);
     results.addView(initialsPanel, new LayoutParams(dp(150), -1));
-    initialLabel = TvStyle.text(activity, "拼音首字母", 12, TvStyle.MUTED);
+    initialLabel = TvStyle.text(skin, "拼音首字母", 12, TvStyle.MUTED);
     initialLabel.setSingleLine();
     initialsPanel.addView(initialLabel, new LayoutParams(-1, dp(28)));
     for (int row = 0; row < 7; row++) {
@@ -182,7 +212,7 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
         String text = index < 26 ? String.valueOf((char) ('A' + index)) : index == 26 ? "←" : "清";
         Button button =
             TvStyle.button(
-                activity,
+                skin,
                 text,
                 index < 26 ? "首字母 " + text : index == 26 ? "退格" : "清空",
                 () -> {
@@ -205,7 +235,7 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
       }
     }
     catalogueTools = new LinearLayout(activity);
-    exact = TvStyle.button(activity, "", "精确搜索", () -> {
+    exact = TvStyle.button(skin, "", "精确搜索", () -> {
       exactSearch = !exactSearch;
       query.setVisibility(exactSearch ? VISIBLE : GONE);
       if (exactSearch) search.requestFocus();
@@ -215,8 +245,21 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
     catalogueTools.addView(exact, new LayoutParams(0, -1, 1));
     catalogueTools.addView(sort, new LayoutParams(0, -1, 1));
     initialsPanel.addView(catalogueTools, new LayoutParams(-1, dp(38)));
+    playlistTools = new LinearLayout(activity);
+    playlistTools.setOrientation(VERTICAL);
+    for (int i = 0; i < randomButtons.length; i++) {
+      int count = (i + 1) * 10;
+      String label = "随机点 " + count + " 首";
+      Button button = TvStyle.button(skin, label, label, () -> enqueueRandom(count));
+      TvStyle.subtle(button);
+      button.setTextSize(12);
+      randomButtons[i] = button;
+      playlistTools.addView(button, new LayoutParams(-1, dp(42)));
+    }
+    results.addView(playlistTools, new LayoutParams(dp(150), -1));
+    playlistTools.setVisibility(GONE);
     results.addView(grid, new LayoutParams(0, -1, 1));
-    empty = TvStyle.text(activity, "正在读取…", 16, TvStyle.MUTED);
+    empty = TvStyle.text(skin, "正在读取…", 16, TvStyle.MUTED);
     empty.setGravity(Gravity.CENTER);
     empty.setSingleLine();
     empty.setEllipsize(TextUtils.TruncateAt.END);
@@ -224,7 +267,7 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
     grid.setEmptyView(empty);
     more =
         TvStyle.button(
-            activity,
+            skin,
             "下一页",
             "下一页",
             () -> {
@@ -269,6 +312,14 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
     }
   };
 
+  void refreshAppearance() {
+    TvAppearance appearance = TvAppearance.of(skin);
+    int backdrop = appearance == null ? Color.TRANSPARENT : (appearance.page() & 0x00ffffff) | 0xcc000000;
+    setBackgroundColor(backdrop);
+    progressBar.setProgressTintList(ColorStateList.valueOf(TvStyle.color(skin, TvStyle.ACCENT)));
+    grid.invalidateViews();
+  }
+
   private int dp(float n) {
     return TvStyle.dp(activity, n);
   }
@@ -312,31 +363,37 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
   private void focusSearch() {
     if (query.isShown()) search.requestFocusFromTouch();
     else if (exact.isShown()) exact.requestFocusFromTouch();
+    else if (playlistTools.isShown()) randomButtons[0].requestFocusFromTouch();
   }
 
   private void focusCard(int position) {
     selectedPosition = Math.max(0, Math.min(rows.length() - 1, position));
     if (!grid.hasFocus()) grid.requestFocusFromTouch();
     int first = grid.getFirstVisiblePosition();
-    int child = selectedPosition - first;
-    View visible = child >= 0 && child < grid.getChildCount() ? grid.getChildAt(child) : null;
-    boolean scrolled = false;
+    int columns = Math.max(1, grid.getNumColumns());
+    View anchor = grid.getChildAt(0);
+    if (anchor == null) {
+      grid.setSelection(selectedPosition);
+      grid.post(this::highlightCards);
+      return;
+    }
+    View target = grid.getChildAt(selectedPosition - first);
+    // All cards within a grid use the same height. Use the first attached row
+    // to locate a target that has not been laid out yet.
+    int rowOffset = selectedPosition / columns - first / columns;
+    int targetTop = target != null ? target.getTop()
+        : anchor.getTop() + rowOffset * (anchor.getHeight() + grid.getVerticalSpacing());
+    int targetBottom = targetTop + (target != null ? target.getHeight() : anchor.getHeight());
     // The grid draws into its padding (clipToPadding=false). A card is fully
     // visible until it crosses the actual viewport edge, including that area.
-    if (visible == null || visible.getTop() < 0
-        || visible.getBottom() > grid.getHeight()) {
-      if (grid.getChildCount() > 0) {
-        int direction = selectedPosition < first || visible != null && visible.getTop() < 0 ? -1 : 1;
-        int columns = Math.max(1, grid.getNumColumns());
-        int rowHeight = grid.getChildCount() > columns
-            ? grid.getChildAt(columns).getTop() - grid.getChildAt(0).getTop() : 0;
-        if (rowHeight > 0) grid.scrollListBy(direction * rowHeight);
-        else grid.setSelection(selectedPosition);
-      } else grid.setSelection(selectedPosition);
-      scrolled = true;
+    int delta = targetTop < 0 ? targetTop : Math.max(0, targetBottom - grid.getHeight());
+    if (delta != 0) {
+      int scrollLimit = grid.getHeight() - grid.getPaddingTop() - grid.getPaddingBottom() - 1;
+      if (Math.abs(delta) > scrollLimit) grid.setSelection(selectedPosition);
+      else grid.scrollListBy(delta);
+      grid.post(this::highlightCards);
     }
     highlightCards();
-    if (scrolled) grid.post(this::highlightCards);
   }
 
   private void highlightCards() {
@@ -353,6 +410,19 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
 
   /** GridView scrolling and selection are explicit even when the TV starts in touch mode. */
   boolean move(int key) {
+    if (playlistTools.hasFocus()) {
+      boolean horizontal = playlistTools.getOrientation() == HORIZONTAL;
+      int previous = horizontal ? KeyEvent.KEYCODE_DPAD_LEFT : KeyEvent.KEYCODE_DPAD_UP;
+      int next = horizontal ? KeyEvent.KEYCODE_DPAD_RIGHT : KeyEvent.KEYCODE_DPAD_DOWN;
+      int enter = horizontal ? KeyEvent.KEYCODE_DPAD_DOWN : KeyEvent.KEYCODE_DPAD_RIGHT;
+      int index = java.util.Arrays.asList(randomButtons).indexOf(findFocus());
+      if (key == previous && index > 0) randomButtons[index - 1].requestFocusFromTouch();
+      else if (key == next && index + 1 < randomButtons.length)
+        randomButtons[index + 1].requestFocusFromTouch();
+      else if (key == enter && rows.length() > 0) focusGrid();
+      else return horizontal && key == next;
+      return true;
+    }
     if (catalogueTools.hasFocus()) {
       if (key == KeyEvent.KEYCODE_DPAD_UP) initialButtons.get(initialButtons.size() - 1).requestFocusFromTouch();
       else if (key == KeyEvent.KEYCODE_DPAD_DOWN) { focusGrid(); return rows.length() > 0; }
@@ -392,6 +462,10 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
       int columns = Math.max(1, grid.getNumColumns());
       if (key == KeyEvent.KEYCODE_DPAD_LEFT) {
         if (position % columns == 0) {
+          if (playlistTools.isShown() && playlistTools.getOrientation() == VERTICAL) {
+            randomButtons[0].requestFocusFromTouch();
+            return true;
+          }
           if (initialsPanel.isShown()) {
             initialButtons.get(keyboardColumns - 1).requestFocusFromTouch();
             return true;
@@ -439,11 +513,13 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
   }
 
   private void load() {
+    boolean playlist = page.equals("my-playlist");
     sort.setVisibility(page.equals("songs") || !artist.isEmpty() ? VISIBLE : GONE);
     sort.setContentDescription("切换歌名排序或随机");
     sort.setSelected(randomOrder);
     initialsPanel.setVisibility(getWidth() >= dp(540) && (page.equals("songs") || page.equals("artists")) ? VISIBLE : GONE);
-    query.setVisibility(page.equals("queue") || ((page.equals("songs") || page.equals("artists")) && !exactSearch) ? GONE : VISIBLE);
+    playlistTools.setVisibility(playlist ? VISIBLE : GONE);
+    query.setVisibility(playlist || page.equals("queue") || ((page.equals("songs") || page.equals("artists")) && !exactSearch) ? GONE : VISIBLE);
     initialLabel.setText(initialQuery.isEmpty() ? "拼音首字母" : initialQuery);
     int request = ++generation;
     selectedPosition = 0;
@@ -463,7 +539,7 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
                         ? "分类歌单"
                         : page.equals("queue")
                             ? "已点歌曲"
-                            : page.equals("online") ? "在线找歌" : "歌名点歌");
+                            : playlist ? "我的歌单" : page.equals("online") ? "在线找歌" : "歌名点歌");
     description.setText(
         page.equals("artists")
             ? "从喜欢的歌手，找到想唱的那一首。"
@@ -471,8 +547,14 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
                 ? "今晚的歌单，按你的顺序唱。"
                 : page.equals("online")
                     ? "找一首喜欢的歌，交给歌房准备。"
-                    : page.equals("playlists") ? "换一种心情，发现下一首。" : "一首熟悉的旋律，一屋子喜欢的人。");
+                    : playlist
+                        ? "本歌房唱完的歌曲，按演唱次数排列。"
+                        : page.equals("playlists") ? "换一种心情，发现下一首。" : "一首熟悉的旋律，一屋子喜欢的人。");
     search.setHint(page.equals("online") ? "输入歌名，搜索在线资源" : "歌名 / 歌手 / 拼音首字母");
+    if (playlist) {
+      readPlaylist(request);
+      return;
+    }
     if (page.equals("queue")) {
       session.read(
           "/api/state",
@@ -540,8 +622,12 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
   }
 
   void queue(JSONObject state) {
-    if (!page.equals("queue")) return;
     JSONArray queue = state.optJSONArray("queue");
+    JSONObject first = queue == null ? null : queue.optJSONObject(0);
+    String entry = first == null ? "" : first.optString("id");
+    if (page.equals("my-playlist") && !entry.equals(playlistEntry)) readPlaylist(++generation);
+    playlistEntry = entry;
+    if (!page.equals("queue")) return;
     if (queue == null) queue = new JSONArray();
     String key = queue.toString();
     if (!key.equals(queueKey)) {
@@ -555,7 +641,51 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
     rows = value;
     adapter.notifyDataSetChanged();
     if (focused && rows.length() > 0) focusCard(selectedPosition);
-    empty.setText(rows.length() == 0 ? "暂无歌曲，可在 NAS 管理端导入或整理。" : "");
+    empty.setText(
+        rows.length() > 0
+            ? ""
+            : page.equals("my-playlist")
+                ? "点一首歌完整唱完，它就会出现在这里。"
+                : "暂无歌曲，可在 NAS 管理端导入或整理。");
+  }
+
+  private void readPlaylist(int request) {
+    session.read("/api/playlist", value -> {
+      if (request != generation || !(value instanceof JSONArray)) return;
+      JSONArray result = (JSONArray) value;
+      if (result.toString().equals(rows.toString()) && rows.length() > 0) return;
+      JSONObject selected = rows.optJSONObject(selectedPosition);
+      if (selected != null) {
+        String id = selected.optString("id");
+        for (int i = 0; i < result.length(); i++) {
+          if (id.equals(result.optJSONObject(i).optString("id"))) {
+            selectedPosition = i;
+            break;
+          }
+        }
+      }
+      setRows(result);
+    });
+  }
+
+  private void enqueueRandom(int count) {
+    if (rows.length() == 0) {
+      android.widget.Toast.makeText(activity, "歌单还没有歌曲", android.widget.Toast.LENGTH_SHORT)
+          .show();
+      return;
+    }
+    session.command(
+        "/api/queue/random",
+        "POST",
+        RoomApi.object("count", count, "name", "电视点歌"),
+        value -> {
+          int added = ((JSONObject) value).optInt("added");
+          android.widget.Toast.makeText(
+                  activity,
+                  added > 0 ? "已随机加入 " + added + " 首歌曲" : "没有可加入的歌曲",
+                  android.widget.Toast.LENGTH_SHORT)
+              .show();
+        });
   }
 
   private void select(JSONObject row) {
@@ -710,26 +840,26 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
       ImageView image;
       TextView title, detail, action;
       if (convert == null) {
-        card = new LinearLayout(activity);
+        card = new LinearLayout(skin);
         card.setOrientation(VERTICAL);
         card.setPadding(dp(5), dp(5), dp(5), dp(7));
-        card.setBackground(TvStyle.card(activity));
+        card.setBackground(TvStyle.card(skin));
         card.setElevation(dp(2));
         image = new ImageView(activity);
         image.setScaleType(ImageView.ScaleType.CENTER_CROP);
         image.setClipToOutline(true);
         card.addView(image, new LayoutParams(-1, dp(102)));
-        title = TvStyle.text(activity, "", 13, TvStyle.INK);
+        title = TvStyle.text(skin, "", 13, TvStyle.INK);
         title.setMaxLines(1);
         title.setEllipsize(TextUtils.TruncateAt.END);
         title.setPadding(dp(5), dp(8), dp(5), 0);
         card.addView(title, new LayoutParams(-1, dp(30)));
-        detail = TvStyle.text(activity, "", 10, TvStyle.MUTED);
+        detail = TvStyle.text(skin, "", 10, TvStyle.MUTED);
         detail.setSingleLine();
         detail.setEllipsize(TextUtils.TruncateAt.END);
         detail.setPadding(dp(5), 0, dp(5), 0);
         card.addView(detail, new LayoutParams(-1, dp(22)));
-        action = TvStyle.text(activity, "＋ 点歌", 10, TvStyle.ACCENT);
+        action = TvStyle.text(skin, "＋ 点歌", 10, TvStyle.ACCENT);
         action.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         action.setPadding(dp(5), 0, dp(6), 0);
         card.addView(action, new LayoutParams(-1, dp(22)));
@@ -737,10 +867,7 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
         title.setDuplicateParentStateEnabled(true);
         detail.setDuplicateParentStateEnabled(true);
         action.setDuplicateParentStateEnabled(true);
-        title.setTextColor(TvStyle.INK);
         title.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        detail.setTextColor(TvStyle.MUTED);
-        action.setTextColor(TvStyle.ACCENT);
       } else {
         card = (LinearLayout) convert;
         Object[] views = (Object[]) card.getTag();
@@ -755,7 +882,6 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
       title.setPadding(dp(5), dp(compact ? 4 : 8), dp(5), 0);
       title.setLayoutParams(new LayoutParams(-1, dp(compact ? 24 : 30)));
       detail.setLayoutParams(new LayoutParams(-1, dp(compact ? 18 : 22)));
-      detail.setTextColor(TvStyle.MUTED);
       action.setVisibility(compact ? GONE : VISIBLE);
       card.setActivated(grid.hasFocus() && position == selectedPosition);
       boolean artistCard = page.equals("artists") && artist.isEmpty();
@@ -766,7 +892,7 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
       LayoutParams imageParams =
           new LayoutParams(-1,
               compact
-                  ? Math.max(dp(68), Math.min(dp(112), (grid.getColumnWidth() - dp(8)) * 9 / 16)) : dp(102));
+                  ? Math.max(dp(68), Math.min(dp(112), (grid.getColumnWidth() - dp(8)) * 9 / 16)) : songCoverHeight);
       imageParams.gravity = Gravity.CENTER_HORIZONTAL;
       imageParams.topMargin = 0;
       imageParams.bottomMargin = 0;
@@ -784,7 +910,8 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
                   ? "按此分类点歌"
                   : page.equals("queue")
                       ? (position == 0 ? "正在播放 · " : "待唱 · ") + row.optString("artist")
-                      : row.optString("artist", row.optString("author", "")));
+                      : row.optString("artist", row.optString("author", ""))
+                          + (page.equals("my-playlist") ? " · 唱过 " + row.optInt("plays") + " 次" : ""));
       card.setContentDescription(title.getText() + "，" + detail.getText());
       bindImage(image, row, artistCard);
       return card;
@@ -795,10 +922,10 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
       ImageView image;
       TextView title, detail;
       if (convert == null) {
-        card = new FrameLayout(activity);
-        card.setBackground(TvStyle.shape(activity, TvStyle.SURFACE, 12));
+        card = new FrameLayout(skin);
+        card.setBackground(TvStyle.shape(skin, TvStyle.SURFACE, 12));
         card.setClipToOutline(true);
-        card.setForeground(TvStyle.photoCardOutline(activity));
+        card.setForeground(TvStyle.photoCardOutline(skin));
         image = new ImageView(activity);
         card.addView(image, new FrameLayout.LayoutParams(-1, -1));
         LinearLayout caption = new LinearLayout(activity);
@@ -810,7 +937,7 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
         title.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         title.setSingleLine();
         title.setEllipsize(TextUtils.TruncateAt.END);
-        detail = TvStyle.text(activity, "", 10, 0xffd4c3e0);
+        detail = TvStyle.text(skin, "", 10, 0xffd4c3e0);
         detail.setSingleLine();
         caption.addView(title, new LayoutParams(-1, -2));
         caption.addView(detail, new LayoutParams(-1, -2));
@@ -912,7 +1039,7 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
     setPadding(dp(compact ? 10 : 24), dp(compact ? 8 : 16), dp(compact ? 10 : 20), dp(compact ? 4 : 12));
     breadcrumb.setVisibility(compact || page.equals("online") ? GONE : VISIBLE);
     description.setVisibility(compact || page.equals("online") ? GONE : VISIBLE);
-    heading.setVisibility(page.equals("online") || (compact && artist.isEmpty() && tag.isEmpty()) ? GONE : VISIBLE);
+    heading.setVisibility(page.equals("online") || (compact && artist.isEmpty() && tag.isEmpty() && !page.equals("my-playlist")) ? GONE : VISIBLE);
     heading.setTextSize(compact ? 14 : 22);
     heading.getLayoutParams().height = dp(compact ? 28 : 34);
     boolean portrait = compact && MeasureSpec.getSize(widthSpec) < MeasureSpec.getSize(heightSpec);
@@ -921,6 +1048,18 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
     results.setOrientation(portrait ? VERTICAL : HORIZONTAL);
     initialsPanel.setLayoutParams(new LayoutParams(portrait ? -1 : dp(compact ? 112 : 150), portrait ? dp(186) : -1));
     initialsPanel.setPadding(0, 0, portrait ? 0 : dp(8), 0);
+    if (playlistTools.getVisibility() == VISIBLE) {
+      int orientation = portrait ? HORIZONTAL : VERTICAL;
+      if (playlistTools.getOrientation() != orientation) {
+        playlistTools.setOrientation(orientation);
+        for (Button button : randomButtons)
+          button.setLayoutParams(
+              portrait ? new LayoutParams(0, -1, 1) : new LayoutParams(-1, dp(42)));
+      }
+      playlistTools.setLayoutParams(
+          new LayoutParams(portrait ? -1 : dp(compact ? 112 : 150), portrait ? dp(42) : -1));
+      playlistTools.setPadding(0, 0, portrait ? 0 : dp(8), 0);
+    }
     grid.setLayoutParams(portrait ? new LayoutParams(-1, 0, 1) : new LayoutParams(0, -1, 1));
     int columns = portrait ? 7 : 4;
     if (columns != keyboardColumns) {

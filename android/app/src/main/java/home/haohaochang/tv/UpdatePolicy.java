@@ -1,60 +1,83 @@
 package home.haohaochang.tv;
 
-import java.net.URI;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 
 final class UpdatePolicy {
-  static final String REPO = "xudong7587/haohaochang-KTV";
+  static final String APPLICATION_ID = "home.haohaochang.tv";
+  private static final String DIRECTORY = "https://dunn.fun/haohaochang/updates/";
+  static final String BUILD_INFO_URL = DIRECTORY + "latest/BUILD_INFO.txt";
+  static final int MAX_BUILD_INFO_BYTES = 16384;
+  private static final long MAX_APK_BYTES = 256L * 1024 * 1024;
 
-  static int assetPriority(String name, String tag) {
-    if (!tag.matches("v?\\d+\\.\\d+\\.\\d+")) return 0;
-    String version = assetVersion(name, tag);
-    if (!version.isEmpty() && version.split("\\.").length == 4) return 3;
-    if (("haohaochang-tv-v" + tag.replaceFirst("^v", "") + ".apk").equals(name)) return 2;
-    return "haohaochang-tv.apk".equals(name) ? 1 : 0;
-  }
+  static final class Release {
+    final String version, notes, sha256;
+    final long versionCode, size;
 
-  static String assetVersion(String name, String tag) {
-    String release = tag.replaceFirst("^v", "");
-    if (!release.matches("\\d+\\.\\d+\\.\\d+")) return "";
-    if (name.equals("haohaochang-tv.apk")) return release;
-    if (!name.startsWith("haohaochang-tv-v") || !name.endsWith(".apk")) return "";
-    String version = name.substring("haohaochang-tv-v".length(), name.length() - 4);
-    return version.equals(release)
-            || version.matches(java.util.regex.Pattern.quote(release) + "\\.\\d+")
-        ? version
-        : "";
-  }
+    private Release(String version, long versionCode, long size, String sha256, String notes) {
+      this.version = version;
+      this.versionCode = versionCode;
+      this.size = size;
+      this.sha256 = sha256;
+      this.notes = notes;
+    }
 
-  static boolean allowed(String value, boolean initial) {
-    try {
-      URI u = new URI(value);
-      if (!"https".equals(u.getScheme())
-          || u.getUserInfo() != null
-          || (u.getPort() != -1 && u.getPort() != 443)) return false;
-      return ("github.com".equals(u.getHost())
-              && u.getPath().startsWith("/" + REPO + "/releases/download/"))
-          || (!initial
-              && ("release-assets.githubusercontent.com".equals(u.getHost())
-                  || "objects.githubusercontent.com".equals(u.getHost())));
-    } catch (Exception e) {
-      return false;
+    String apkUrl() {
+      return DIRECTORY + "v" + version + "/haohaochang-tv-v" + version + ".apk";
+    }
+
+    boolean newerThan(long installed) {
+      return versionCode > installed;
     }
   }
 
-  static boolean newer(String next, String current) {
-    if (!next.matches("v?\\d+\\.\\d+\\.\\d+(\\.\\d+)?")
-        || !current.matches("v?\\d+\\.\\d+\\.\\d+(\\.\\d+)?")) return false;
-    try {
-      String[] a = next.replaceFirst("^v", "").split("\\."),
-          b = current.replaceFirst("^v", "").split("\\.");
-      for (int i = 0; i < 4; i++) {
-        long x = i < a.length ? Long.parseLong(a[i]) : 0,
-            y = i < b.length ? Long.parseLong(b[i]) : 0;
-        if (x != y) return x > y;
+  static Release parse(String text) {
+    Map<String, String> fields = new HashMap<>();
+    for (String line : text.split("\\r?\\n")) {
+      if (line.trim().isEmpty() || line.startsWith("#")) continue;
+      int separator = line.indexOf('=');
+      if (separator < 1) throw invalidBuild();
+      String key = line.substring(0, separator);
+      String value = line.substring(separator + 1);
+      switch (key) {
+        case "version":
+        case "versionCode":
+        case "applicationId":
+        case "debuggable":
+        case "size":
+        case "sha256":
+          if (fields.put(key, value) != null) throw invalidBuild();
+          break;
+        case "notes":
+          fields.put(key, value);
+          break;
+        default:
+          // The host may publish extra data such as the source commit.
       }
-    } catch (NumberFormatException e) {
-      return false;
     }
-    return false;
+    String version = Objects.toString(fields.get("version"), "");
+    String sha256 = Objects.toString(fields.get("sha256"), "");
+    String notes = Objects.toString(fields.get("notes"), "");
+    if (!APPLICATION_ID.equals(fields.get("applicationId"))
+        || !"false".equals(fields.get("debuggable"))
+        || !version.matches("[0-9]{1,9}(\\.[0-9]{1,9}){2,3}")
+        || !sha256.matches("[a-fA-F0-9]{64}")
+        || notes.length() > 2000) throw invalidBuild();
+    long versionCode = positiveDecimal(fields.get("versionCode"), Integer.MAX_VALUE);
+    long size = positiveDecimal(fields.get("size"), MAX_APK_BYTES);
+    return new Release(version, versionCode, size, sha256.toLowerCase(Locale.ROOT), notes);
+  }
+
+  private static long positiveDecimal(String value, long max) {
+    if (value == null || !value.matches("[1-9][0-9]{0,9}")) throw invalidBuild();
+    long result = Long.parseLong(value);
+    if (result > max) throw invalidBuild();
+    return result;
+  }
+
+  private static IllegalArgumentException invalidBuild() {
+    return new IllegalArgumentException("官方版本信息无效");
   }
 }

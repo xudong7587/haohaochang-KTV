@@ -50,7 +50,7 @@ final class NativeRoomOverlay extends LinearLayout implements AutoCloseable {
     qr.setContentDescription("手机扫码点歌二维码");
     qr.setBackgroundColor(android.graphics.Color.WHITE);
     code.addView(qr, new LayoutParams(dp(96), dp(96)));
-    TextView label = TvStyle.text(context, "手机扫码点歌", 10, TvStyle.INK);
+    TextView label = TvStyle.text(context, "扫码点歌／麦克风", 10, TvStyle.INK);
     label.setGravity(Gravity.CENTER);
     code.addView(label, new LayoutParams(-1, dp(24)));
     queuePanel = new LinearLayout(context);

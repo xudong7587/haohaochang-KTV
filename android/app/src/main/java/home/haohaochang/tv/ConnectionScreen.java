@@ -14,7 +14,7 @@ import java.util.List;
 
 /** Native UI remains visible even if the TV browser cannot start. */
 final class ConnectionScreen extends LinearLayout {
-    interface Actions { void scan(); void manual(); void connect(String address); void cancel(); }
+    interface Actions { void scan(); void manual(); void connect(String address); void cancel(); void update(); }
     private final Activity activity;
     private final Actions actions;
     private final LinearLayout card;
@@ -49,6 +49,7 @@ final class ConnectionScreen extends LinearLayout {
         Runnable connect=()->{try{actions.connect(ConnectionPolicy.normalize(input.getText().toString()));}catch(IllegalArgumentException error){input.setError(error.getMessage());input.requestFocus();}};
         input.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_GO);input.setOnEditorActionListener((v,id,event)->{if(id==android.view.inputmethod.EditorInfo.IME_ACTION_GO){connect.run();return true;}return false;});
         button("连接歌房",connect,true).requestFocus();button("重新自动发现",actions::scan,false);if(canCancel)button("返回原歌房",actions::cancel,false);
+        button("检查更新",actions::update,false);
     }
     void servers(List<LanDiscovery.Server> servers) {for(LanDiscovery.Server server:servers)button("家庭歌房\n"+server.address,()->actions.connect(server.address),true);button("手动输入其他地址",actions::manual,false);card.getChildAt(2).requestFocus();}
     void failure(String address,String detail) {

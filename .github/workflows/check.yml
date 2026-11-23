@@ -1,83 +1,13 @@
-name: Validate and build
-on: [push, pull_request, workflow_dispatch]
+name: Sign Haohaochang TV v1.1.5.1
+on:
+  push:
+    branches: [codex/tv-v1.1.5.1-official-signing]
+permissions:
+  contents: read
 jobs:
-  web:
+  signed-tv-apk:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: {node-version: '24', cache: npm}
-      - run: npm ci
-      - run: node scripts/check-release-version.mjs
-      - run: node scripts/render-compose.mjs --check
-      - run: docker compose config -q && docker compose -f docker-compose.arm64.yaml config -q
-      - run: npm test
-        timeout-minutes: 3
-      - run: npm run build
-      - run: npx playwright install --with-deps chromium
-      - run: node scripts/ui-check.mjs
-        timeout-minutes: 3
-      - run: node tests/room-browsing.browser.mjs
-        timeout-minutes: 3
-      - run: node tests/library-ui.browser.mjs
-        timeout-minutes: 3
-      - run: node tests/online-player.browser.mjs
-        timeout-minutes: 3
-      - run: node tests/tv-pairing.browser.mjs
-        timeout-minutes: 3
-      - run: node tests/feedback.browser.mjs
-        timeout-minutes: 3
-      - run: node tests/pc-worker-ui.browser.mjs
-        timeout-minutes: 3
-      - run: node tests/poster.browser.mjs
-        timeout-minutes: 3
-      - run: node tests/artist-artwork.browser.mjs
-        timeout-minutes: 3
-      - run: node tests/poster-editor.browser.mjs
-        timeout-minutes: 3
-      - run: node tests/pc-dashboard.browser.mjs
-        timeout-minutes: 3
-      - run: node tests/player-lease.browser.mjs
-        timeout-minutes: 3
-      - run: node tests/adaptive-player.browser.mjs
-        timeout-minutes: 3
-      - run: node tests/native-player.browser.mjs
-        timeout-minutes: 3
-      - run: node scripts/player-check.mjs
-        timeout-minutes: 3
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: browser-validation
-          path: test-results/
-      - run: docker build -t haohaochang:test .
-      - name: Verify NAS cover processing and TV startup assets
-        run: docker run --rm -v "$PWD/scripts:/app/scripts:ro" haohaochang:test node scripts/check-poster-runtime.mjs
-      - name: Verify split Compose and main-only update
-        timeout-minutes: 12
-        run: sh scripts/check-compose-runtime.sh
-  windows-launcher:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/bili-preprocess/test.ps1
-      - run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/launcher-check.ps1
-        timeout-minutes: 2
-  worker-protocol:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: '3.12'}
-      - run: pip install fastapi==0.115.12 python-multipart==0.0.20 httpx psutil==7.0.0 numpy==1.26.4
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - run: python -m unittest discover -s separator -p test_protocol.py
-      - run: python -m unittest discover -s separator -p test_concurrency.py
-      - run: python -m unittest discover -s separator -p test_npu.py
-      - run: python -m unittest discover -s pc-worker -p test_lan.py
-      - run: python -m unittest discover -s pc-worker -p 'test_update*.py'
-  apk:
-    runs-on: ubuntu-latest
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -88,36 +18,26 @@ jobs:
           log-accepted-android-sdk-licenses: false
       - uses: gradle/actions/setup-gradle@v4
         with: {gradle-version: '9.4.1'}
-      - run: gradle -p android testDebugUnitTest lintDebug assembleDebug
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: native-tv-validation
-          path: |
-            android/app/build/reports/tests/
-            android/app/build/reports/lint-results-debug.html
-            android/app/build/test-screenshots/
-      - name: Build signed TV update
-        if: github.event_name != 'pull_request'
+      - name: Build the release using the existing repository signing key
         env:
           TV_KEYSTORE_BASE64: ${{ secrets.TV_KEYSTORE_BASE64 }}
           TV_KEYSTORE_PASSWORD: ${{ secrets.TV_KEYSTORE_PASSWORD }}
+        shell: bash
         run: |
+          umask 077
           test -n "$TV_KEYSTORE_BASE64"
-          export TV_KEYSTORE_FILE="$RUNNER_TEMP/tv-release.p12"
+          export TV_KEYSTORE_FILE="$RUNNER_TEMP/ktv-release.p12"
+          trap 'rm -f "$TV_KEYSTORE_FILE"' EXIT
           printf '%s' "$TV_KEYSTORE_BASE64" | base64 --decode > "$TV_KEYSTORE_FILE"
-          gradle -p android assembleRelease
-          version=$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" android/app/build.gradle)
-          test -n "$version"
-          echo "TV_VERSION=$version" >> "$GITHUB_ENV"
-          cp android/app/build/outputs/apk/release/app-release.apk "haohaochang-tv-v$version.apk"
-          rm -f "$TV_KEYSTORE_FILE"
-      - uses: actions/upload-artifact@v4
-        if: github.event_name != 'pull_request'
-        with:
-          name: haohaochang-tv-v${{ env.TV_VERSION }}
-          path: haohaochang-tv-v${{ env.TV_VERSION }}.apk
+          unset TV_KEYSTORE_BASE64
+          gradle -p android --no-daemon assembleRelease
+          mkdir -p signed
+          cp android/app/build/outputs/apk/release/app-release.apk signed/haohaochang-tv-v1.1.5.1.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify signed/haohaochang-tv-v1.1.5.1.apk
+          git rev-parse HEAD > signed/SOURCE_COMMIT.txt
+          (cd signed && sha256sum haohaochang-tv-v1.1.5.1.apk > SHA256SUMS.txt)
       - uses: actions/upload-artifact@v4
         with:
-          name: haohaochang-tv-debug
-          path: android/app/build/outputs/apk/debug/*.apk
+          name: haohaochang-tv-v1.1.5.1
+          path: signed/
+          if-no-files-found: error

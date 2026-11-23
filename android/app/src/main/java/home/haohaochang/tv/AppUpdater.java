@@ -2,282 +2,299 @@ package home.haohaochang.tv;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ClipData;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.Signature;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.security.MessageDigest;
 import java.util.Arrays;
-import org.json.JSONArray;
-import org.json.JSONObject;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.concurrent.TimeUnit;
+import okhttp3.CacheControl;
+import okhttp3.Call;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 
 final class AppUpdater {
+  private static final OkHttpClient HTTP = new OkHttpClient.Builder()
+      .followRedirects(false)
+      .followSslRedirects(false)
+      .connectTimeout(15, TimeUnit.SECONDS)
+      .readTimeout(20, TimeUnit.SECONDS)
+      .callTimeout(10, TimeUnit.MINUTES)
+      .build();
   private final Activity activity;
-  private volatile boolean busy, cancelled;
-  private boolean waitingPermission;
+  private Operation operation;
+  private File waitingPermission;
+
+  private static final class Operation {
+    volatile boolean cancelled;
+    volatile Call call;
+
+    void cancel() {
+      cancelled = true;
+      Call active = call;
+      if (active != null) active.cancel();
+    }
+  }
+
+  private interface Work {
+    Runnable run(Operation request, AlertDialog progress) throws Exception;
+  }
 
   AppUpdater(Activity activity) {
     this.activity = activity;
   }
 
-  private void ui(Runnable work) {
-    activity.runOnUiThread(
-        () -> {
-          if (!activity.isFinishing() && !activity.isDestroyed()) work.run();
-        });
-  }
-
-  private String current() throws Exception {
-    return activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0).versionName;
-  }
-
-  private HttpURLConnection connect(String url, boolean metadata) throws Exception {
-    for (int i = 0; i < 6; i++) {
-      if (!metadata && !UpdatePolicy.allowed(url, false)) throw new Exception("下载地址不可信");
-      HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
-      c.setConnectTimeout(15000);
-      c.setReadTimeout(20000);
-      c.setInstanceFollowRedirects(false);
-      c.setRequestProperty("User-Agent", "haohaochang-tv");
-      int code = c.getResponseCode();
-      if (code == 200) return c;
-      if (!metadata && code >= 300 && code < 400) {
-        String next = c.getHeaderField("Location");
-        c.disconnect();
-        url = new URL(new URL(url), next).toString();
-        continue;
-      }
-      c.disconnect();
-      throw new Exception("GitHub 暂不可用（" + code + "），稍后重试");
-    }
-    throw new Exception("下载重定向过多");
-  }
-
   void check() {
-    if (busy) return;
-    busy = true;
-    cancelled = false;
-    AlertDialog progress =
-        new AlertDialog.Builder(activity)
-            .setTitle("检查更新")
-            .setMessage("正在连接 GitHub…")
-            .setNegativeButton("取消", (d, w) -> cancelled = true)
-            .create();
-    progress.setOnCancelListener(d -> cancelled = true);
-    progress.show();
-    new Thread(
-            () -> {
-              try {
-                HttpURLConnection connection =
-                    connect(
-                        "https://api.github.com/repos/" + UpdatePolicy.REPO + "/releases/latest",
-                        true);
-                ByteArrayOutputStream data = new ByteArrayOutputStream();
-                try (InputStream in = connection.getInputStream()) {
-                  byte[] buffer = new byte[8192];
-                  int n;
-                  while ((n = in.read(buffer)) != -1) {
-                    data.write(buffer, 0, n);
-                    if (data.size() > 2 * 1024 * 1024) throw new Exception("版本信息过大");
-                  }
-                } finally {
-                  connection.disconnect();
-                }
-                JSONObject release = new JSONObject(data.toString("UTF-8"));
-                String tag = release.getString("tag_name");
-                if (release.optBoolean("draft") || release.optBoolean("prerelease"))
-                  throw new Exception("暂无正式新版");
-                JSONArray assets = release.getJSONArray("assets");
-                JSONObject found = null;
-                int priority = 0;
-                for (int i = 0; i < assets.length(); i++) {
-                  JSONObject candidate = assets.getJSONObject(i);
-                  int score = UpdatePolicy.assetPriority(candidate.getString("name"), tag);
-                  if (score > priority
-                      || (score > 0
-                          && score == priority
-                          && found != null
-                          && UpdatePolicy.newer(
-                              UpdatePolicy.assetVersion(candidate.getString("name"), tag),
-                              UpdatePolicy.assetVersion(found.getString("name"), tag)))) {
-                    found = candidate;
-                    priority = score;
-                  }
-                }
-                String version =
-                    found == null ? tag : UpdatePolicy.assetVersion(found.getString("name"), tag);
-                if (!UpdatePolicy.newer(version, current())) {
-                  ui(
-                      () -> {
-                        progress.dismiss();
-                        if (!cancelled) message("已是最新版本");
-                      });
-                  return;
-                }
-                if (found == null
-                    || !UpdatePolicy.allowed(found.getString("browser_download_url"), true)
-                    || !found.optString("digest").matches("sha256:[a-f0-9]{64}")
-                    || found.getLong("size") <= 0
-                    || found.getLong("size") > 50 * 1024 * 1024)
-                  throw new Exception("新版缺少有效的 APK 或校验信息");
-                final JSONObject asset = found;
-                ui(
-                    () -> {
-                      progress.dismiss();
-                      if (!cancelled)
-                        new AlertDialog.Builder(activity)
-                            .setTitle("发现新版 " + version)
-                            .setMessage("下载校验后将打开系统安装界面。连接设置会保留。")
-                            .setPositiveButton("下载更新", (d, w) -> download(asset))
-                            .setNegativeButton("稍后", null)
-                            .show();
-                    });
-              } catch (Exception e) {
-                ui(
-                    () -> {
-                      progress.dismiss();
-                      if (!cancelled) message("检查失败：" + e.getMessage());
-                    });
-              } finally {
-                busy = false;
-              }
-            },
-            "tv-update-check")
-        .start();
+    if (BuildConfig.DEBUG || !UpdatePolicy.APPLICATION_ID.equals(activity.getPackageName())) {
+      message("测试版请手动安装新版测试 APK。");
+      return;
+    }
+    run("检查更新", "正在读取官网版本信息…", (request, progress) -> {
+      UpdatePolicy.Release release = UpdatePolicy.parse(readBuildInfo(request));
+      PackageInfo installed = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0);
+      if (!release.newerThan(versionCode(installed)))
+        return () -> message("当前版本 " + installed.versionName + " 已是最新版本。");
+      return () -> offerDownload(release);
+    });
   }
 
-  private void download(JSONObject asset) {
-    if (busy) return;
-    busy = true;
-    cancelled = false;
-    AlertDialog progress =
-        new AlertDialog.Builder(activity)
-            .setTitle("下载新版")
-            .setMessage("正在下载…")
-            .setNegativeButton("取消", (d, w) -> cancelled = true)
-            .create();
-    progress.setOnCancelListener(d -> cancelled = true);
+  private void offerDownload(UpdatePolicy.Release release) {
+    String details = "下载并校验后，可在电视上安装。连接设置会保留。";
+    if (!release.notes.isEmpty()) details = release.notes + "\n\n" + details;
+    new AlertDialog.Builder(activity)
+        .setTitle("发现新版 " + release.version)
+        .setMessage(details)
+        .setPositiveButton("下载更新", (d, w) -> download(release))
+        .setNegativeButton("稍后", null)
+        .show();
+  }
+
+  private void download(UpdatePolicy.Release release) {
+    run("下载新版 " + release.version, "正在连接官方下载地址…", (request, progress) -> {
+      File directory = UpdateProvider.directory(activity);
+      if (!directory.isDirectory() && !directory.mkdirs()) throw new IOException("无法打开更新缓存");
+      File partial = File.createTempFile("update-", ".part.apk", directory);
+      try {
+        MessageDigest hash = MessageDigest.getInstance("SHA-256");
+        long total = 0;
+        int lastPercent = -1;
+        try (Response response = fetch(request, release.apkUrl());
+            InputStream input = response.body().byteStream();
+            FileOutputStream output = new FileOutputStream(partial)) {
+          byte[] buffer = new byte[65536];
+          int count;
+          while ((count = input.read(buffer)) != -1) {
+            total += count;
+            if (total > release.size) throw new IOException("文件大小不匹配");
+            output.write(buffer, 0, count);
+            hash.update(buffer, 0, count);
+            int percent = (int) (total * 100 / release.size);
+            if (percent == lastPercent) continue;
+            lastPercent = percent;
+            ui(() -> {
+              if (!request.cancelled) progress.setMessage("已下载 " + percent + "%");
+            });
+          }
+        }
+        if (total != release.size || !release.sha256.equals(hex(hash.digest())))
+          throw new IOException("下载校验失败");
+        if (request.cancelled) throw new IOException("已取消");
+        verify(partial, release);
+        File apk = new File(directory, "update-" + release.sha256 + ".apk");
+        if (!partial.renameTo(apk)) throw new IOException("无法保存安装包");
+        pruneOlderFiles(directory, apk);
+        return () -> offerInstall(apk);
+      } finally {
+        partial.delete();
+      }
+    });
+  }
+
+  private static void pruneOlderFiles(File directory, File current) {
+    long oldest = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(1);
+    File[] files = directory.listFiles();
+    if (files != null)
+      for (File file : files)
+        if (!file.equals(current) && file.lastModified() < oldest) file.delete();
+  }
+
+  private static String readBuildInfo(Operation request) throws Exception {
+    try (Response response = fetch(request, UpdatePolicy.BUILD_INFO_URL);
+        InputStream input = response.body().byteStream()) {
+      ByteArrayOutputStream data = new ByteArrayOutputStream();
+      byte[] buffer = new byte[4096];
+      int count;
+      while ((count = input.read(buffer)) != -1) {
+        if (data.size() + count > UpdatePolicy.MAX_BUILD_INFO_BYTES) throw new IOException("版本信息过大");
+        data.write(buffer, 0, count);
+      }
+      return data.toString("UTF-8");
+    }
+  }
+
+  private static Response fetch(Operation operation, String url) throws IOException {
+    Call call = HTTP.newCall(new Request.Builder()
+        .url(url)
+        .header("User-Agent", "HaohaochangTV/" + BuildConfig.VERSION_NAME)
+        .header("Accept-Encoding", "identity")
+        .cacheControl(CacheControl.FORCE_NETWORK)
+        .build());
+    operation.call = call;
+    if (operation.cancelled) call.cancel();
+    Response response = call.execute();
+    if (response.code() == 200 && response.body() != null) return response;
+    int code = response.code();
+    response.close();
+    throw new IOException("官方更新暂不可用（HTTP " + code + "）");
+  }
+
+  private void run(String title, String status, Work work) {
+    if (operation != null) return;
+    Operation request = new Operation();
+    operation = request;
+    AlertDialog progress = new AlertDialog.Builder(activity)
+        .setTitle(title)
+        .setMessage(status)
+        .setNegativeButton("取消", (d, w) -> request.cancel())
+        .create();
+    progress.setOnCancelListener(d -> request.cancel());
     progress.show();
-    new Thread(
-            () -> {
-              File file = new File(activity.getCacheDir(), "update.apk");
-              try {
-                HttpURLConnection connection =
-                    connect(asset.getString("browser_download_url"), false);
-                long expected = asset.getLong("size"), total = 0;
-                int last = -1;
-                MessageDigest hash = MessageDigest.getInstance("SHA-256");
-                try (InputStream in = connection.getInputStream();
-                    FileOutputStream out = new FileOutputStream(file)) {
-                  byte[] buffer = new byte[65536];
-                  int n;
-                  while ((n = in.read(buffer)) != -1) {
-                    if (cancelled) throw new Exception("已取消");
-                    total += n;
-                    if (total > expected) throw new Exception("文件大小不匹配");
-                    out.write(buffer, 0, n);
-                    hash.update(buffer, 0, n);
-                    int pct = (int) (total * 100 / expected);
-                    if (pct != last) {
-                      last = pct;
-                      ui(() -> progress.setMessage("已下载 " + pct + "%"));
-                    }
-                  }
-                } finally {
-                  connection.disconnect();
-                }
-                StringBuilder hex = new StringBuilder();
-                for (byte b : hash.digest()) hex.append(String.format("%02x", b & 255));
-                if (total != expected || !asset.getString("digest").equals("sha256:" + hex))
-                  throw new Exception("下载校验失败");
-                verify(file);
-                ui(
-                    () -> {
-                      progress.dismiss();
-                      if (!cancelled) install();
-                    });
-              } catch (Exception e) {
-                file.delete();
-                ui(
-                    () -> {
-                      progress.dismiss();
-                      if (!cancelled) message("更新失败：" + e.getMessage());
-                    });
-              } finally {
-                busy = false;
-              }
-            },
-            "tv-update-download")
-        .start();
+    new Thread(() -> {
+      Runnable next;
+      try {
+        next = work.run(request, progress);
+      } catch (Exception error) {
+        next = () -> message(title + "失败：" + error.getMessage());
+      }
+      Runnable result = next;
+      ui(() -> {
+        operation = null;
+        progress.dismiss();
+        if (!request.cancelled) result.run();
+      });
+    }, "tv-update").start();
   }
 
   @SuppressWarnings("deprecation")
-  private void verify(File file) throws Exception {
+  private void verify(File file, UpdatePolicy.Release release) throws Exception {
     PackageManager pm = activity.getPackageManager();
-    PackageInfo next =
-        pm.getPackageArchiveInfo(file.getAbsolutePath(), PackageManager.GET_SIGNATURES);
-    PackageInfo old = pm.getPackageInfo(activity.getPackageName(), PackageManager.GET_SIGNATURES);
-    if (next == null
-        || !activity.getPackageName().equals(next.packageName)
-        || next.versionCode <= old.versionCode
-        || !Arrays.equals(next.signatures, old.signatures)) throw new Exception("安装包名称、版本或签名不匹配");
+    int signatures = Build.VERSION.SDK_INT >= 28
+        ? PackageManager.GET_SIGNING_CERTIFICATES : PackageManager.GET_SIGNATURES;
+    PackageInfo next = pm.getPackageArchiveInfo(file.getAbsolutePath(), signatures);
+    PackageInfo installed = pm.getPackageInfo(activity.getPackageName(), signatures);
+    if (!matchesInstalledApp(installed, next, release))
+      throw new IOException("安装包名称、版本或签名不匹配");
   }
 
-  private void install() {
+  static boolean matchesInstalledApp(PackageInfo installed, PackageInfo next, UpdatePolicy.Release release) {
+    return next != null
+        && UpdatePolicy.APPLICATION_ID.equals(next.packageName)
+        && next.packageName.equals(installed.packageName)
+        && next.applicationInfo != null
+        && (next.applicationInfo.flags & ApplicationInfo.FLAG_DEBUGGABLE) == 0
+        && release.version.equals(next.versionName)
+        && release.versionCode == versionCode(next)
+        && release.newerThan(versionCode(installed))
+        && sameSigners(certificates(installed), certificates(next));
+  }
+
+  @SuppressWarnings("deprecation")
+  private static long versionCode(PackageInfo info) {
+    return Build.VERSION.SDK_INT >= 28 ? info.getLongVersionCode() : info.versionCode;
+  }
+
+  @SuppressWarnings("deprecation")
+  private static Signature[] certificates(PackageInfo info) {
+    if (Build.VERSION.SDK_INT < 28) return info.signatures;
+    return info.signingInfo == null ? null : info.signingInfo.getApkContentsSigners();
+  }
+
+  private static boolean sameSigners(Signature[] installed, Signature[] next) {
+    return installed != null && installed.length > 0 && next != null
+        && new HashSet<>(Arrays.asList(installed)).equals(new HashSet<>(Arrays.asList(next)));
+  }
+
+  private static String hex(byte[] bytes) {
+    StringBuilder result = new StringBuilder();
+    for (byte value : bytes) result.append(String.format(Locale.ROOT, "%02x", value & 255));
+    return result.toString();
+  }
+
+  private void offerInstall(File apk) {
+    new AlertDialog.Builder(activity)
+        .setTitle("更新已下载")
+        .setMessage("请在系统安装界面确认更新。")
+        .setPositiveButton("安装更新", (d, w) -> install(apk))
+        .setNegativeButton("稍后", null)
+        .show();
+  }
+
+  private void install(File apk) {
     try {
-      verify(new File(activity.getCacheDir(), "update.apk"));
-      if (Build.VERSION.SDK_INT >= 26
-          && !activity.getPackageManager().canRequestPackageInstalls()) {
-        waitingPermission = true;
+      if (!apk.isFile()) throw new IOException("请重新下载更新包");
+      if (Build.VERSION.SDK_INT >= 26 && !activity.getPackageManager().canRequestPackageInstalls()) {
         new AlertDialog.Builder(activity)
             .setTitle("允许安装更新")
             .setMessage("请在系统设置中允许好好唱安装应用，然后返回继续。")
-            .setPositiveButton(
-                "打开设置",
-                (d, w) -> {
-                  try {
-                    activity.startActivity(
-                        new Intent(
-                            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                            Uri.parse("package:" + activity.getPackageName())));
-                  } catch (Exception e) {
-                    waitingPermission = false;
-                    message("设备不支持打开安装权限设置");
-                  }
-                })
-            .setNegativeButton("取消", (d, w) -> waitingPermission = false)
+            .setPositiveButton("打开设置", (d, w) -> requestInstallPermission(apk))
+            .setNegativeButton("取消", null)
             .show();
         return;
       }
-      Uri uri = Uri.parse("content://" + activity.getPackageName() + ".updates/update.apk");
-      activity.startActivity(
-          new Intent(Intent.ACTION_VIEW)
-              .setDataAndType(uri, "application/vnd.android.package-archive")
-              .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION));
-    } catch (Exception e) {
-      message("无法安装：" + e.getMessage());
+      Uri uri = Uri.parse("content://" + activity.getPackageName() + ".updates/" + apk.getName());
+      Intent intent = new Intent(Intent.ACTION_VIEW)
+          .setDataAndType(uri, UpdateProvider.APK_MIME)
+          .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+      intent.setClipData(ClipData.newRawUri("好好唱更新", uri));
+      activity.startActivity(intent);
+    } catch (Exception error) {
+      message("无法安装：" + error.getMessage());
+    }
+  }
+
+  private void requestInstallPermission(File apk) {
+    try {
+      waitingPermission = apk;
+      activity.startActivity(new Intent(
+          Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+          Uri.parse("package:" + activity.getPackageName())));
+    } catch (Exception error) {
+      waitingPermission = null;
+      message("设备不支持打开安装权限设置");
     }
   }
 
   void resume() {
-    if (waitingPermission
-        && Build.VERSION.SDK_INT >= 26
-        && activity.getPackageManager().canRequestPackageInstalls()) {
-      waitingPermission = false;
-      install();
+    File apk = waitingPermission;
+    waitingPermission = null;
+    if (apk != null && Build.VERSION.SDK_INT >= 26) {
+      if (activity.getPackageManager().canRequestPackageInstalls()) install(apk);
+      else offerInstall(apk);
     }
   }
 
   void destroy() {
-    cancelled = true;
+    if (operation != null) operation.cancel();
+  }
+
+  private void ui(Runnable work) {
+    activity.runOnUiThread(() -> {
+      if (!activity.isFinishing() && !activity.isDestroyed()) work.run();
+    });
   }
 
   private void message(String value) {
