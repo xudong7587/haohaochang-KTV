@@ -2,7 +2,6 @@ package home.haohaochang.tv;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.BitmapFactory;
@@ -41,8 +40,6 @@ final class NativeRoom extends FrameLayout implements RoomSession.Listener, Auto
   private final Activity activity;
   private final Actions actions;
   private final SharedPreferences preferences;
-  private final TvAppearance appearance;
-  private final Context skin;
   private final RoomSession session;
   private final NativeMicrophone microphone;
   private final NativePlayback player;
@@ -99,10 +96,8 @@ final class NativeRoom extends FrameLayout implements RoomSession.Listener, Auto
     this.activity = activity;
     this.actions = actions;
     preferences = activity.getSharedPreferences("native-room", Activity.MODE_PRIVATE);
-    appearance = new TvAppearance(activity);
-    skin = appearance.context;
     lyricsVisible = preferences.getBoolean("lyrics", true);
-    setBackgroundColor(TvStyle.color(skin, TvStyle.BACKGROUND));
+    setBackgroundColor(TvStyle.BACKGROUND);
     setDescendantFocusability(FOCUS_AFTER_DESCENDANTS);
     setFocusable(false);
     session = new RoomSession(api, this);
@@ -134,7 +129,7 @@ final class NativeRoom extends FrameLayout implements RoomSession.Listener, Auto
               }
             });
     stage.addView(lyrics, new FrameLayout.LayoutParams(-1, -1));
-    overlay = new NativeRoomOverlay(skin, session);
+    overlay = new NativeRoomOverlay(activity, session);
     FrameLayout.LayoutParams overlayParams =
         new FrameLayout.LayoutParams(dp(176), -2, Gravity.TOP | Gravity.RIGHT);
     overlayParams.topMargin = dp(20);
@@ -148,7 +143,7 @@ final class NativeRoom extends FrameLayout implements RoomSession.Listener, Auto
     sidebar = new LinearLayout(activity);
     sidebar.setOrientation(LinearLayout.VERTICAL);
     sidebar.setPadding(dp(12), dp(12), dp(12), dp(10));
-    sidebar.setBackground(TvStyle.panel(skin));
+    sidebar.setBackground(TvStyle.panel(activity));
     addView(sidebar);
     LinearLayout brand = new LinearLayout(activity);
     brand.setGravity(Gravity.CENTER_VERTICAL);
@@ -158,19 +153,19 @@ final class NativeRoom extends FrameLayout implements RoomSession.Listener, Auto
     LinearLayout wordmark = new LinearLayout(activity);
     wordmark.setOrientation(LinearLayout.VERTICAL);
     wordmark.setPadding(dp(8), 0, 0, 0);
-    wordmark.addView(TvStyle.text(skin, "好好唱", 21, TvStyle.INK));
-    TextView english = TvStyle.text(skin, "HOME KARAOKE", 6, TvStyle.MUTED);
+    wordmark.addView(TvStyle.text(activity, "好好唱", 21, TvStyle.INK));
+    TextView english = TvStyle.text(activity, "HOME KARAOKE", 6, TvStyle.MUTED);
     english.setLetterSpacing(.16f);
     wordmark.addView(english);
     brand.addView(wordmark);
     sidebar.addView(brand, new LinearLayout.LayoutParams(-1, dp(46)));
-    roomBadge = TvStyle.text(skin, "我的客厅\n已连接 · NAS", 10, TvStyle.MUTED);
+    roomBadge = TvStyle.text(activity, "我的客厅\n已连接 · NAS", 10, TvStyle.MUTED);
     roomBadge.setGravity(Gravity.CENTER_VERTICAL);
     roomBadge.setPadding(dp(10), 0, dp(8), 0);
     roomBadge.setLineSpacing(dp(5), 1);
-    roomBadge.setBackground(TvStyle.surface(skin, 0xff2b2339, 0xff211b2b, 9, 0x14e5d2ff));
+    roomBadge.setBackground(TvStyle.surface(activity, 0xff2b2339, 0xff211b2b, 9, 0x14e5d2ff));
     sidebar.addView(roomBadge, new LinearLayout.LayoutParams(-1, dp(32)));
-    navCaption = TvStyle.text(skin, "发现你的下一首", 9, TvStyle.MUTED);
+    navCaption = TvStyle.text(activity, "发现你的下一首", 9, TvStyle.MUTED);
     navCaption.setGravity(Gravity.CENTER_VERTICAL);
     navCaption.setPadding(dp(6), 0, 0, 0);
     sidebar.addView(navCaption, new LinearLayout.LayoutParams(-1, dp(22)));
@@ -182,43 +177,38 @@ final class NativeRoom extends FrameLayout implements RoomSession.Listener, Auto
     queueButton = nav("已点歌曲", "queue");
     nav("在线找歌", "online");
     sidebar.addView(new View(activity), new LinearLayout.LayoutParams(1, 0, 1));
-    Button appearanceButton = TvStyle.button(skin, "画面风格", "画面风格",
-        () -> appearance.show(activity, this::refreshAppearance));
-    TvStyle.icon(appearanceButton, "palette");
-    sidebar.addView(appearanceButton, new LinearLayout.LayoutParams(-1, dp(34)));
-    settings = TvStyle.button(skin, "设置", "设置", actions::settings);
+    settings = TvStyle.button(activity, "设置", "设置", actions::settings);
     TvStyle.icon(settings, "settings");
     LinearLayout.LayoutParams settingsParams = new LinearLayout.LayoutParams(-1, dp(32));
     settingsParams.topMargin = dp(8);
     sidebar.addView(settings, settingsParams);
-    catalogue = new NativeCatalogue(activity, session, skin);
-    if (appearance.active) catalogue.refreshAppearance();
+    catalogue = new NativeCatalogue(activity, session);
     addView(catalogue);
     catalogue.setVisibility(GONE);
     footer = new FrameLayout(activity);
-    footer.setBackground(TvStyle.footer(skin));
+    footer.setBackground(TvStyle.footer(activity));
     footer.setElevation(dp(4));
     addView(footer);
     nowPlaying = new LinearLayout(activity);
     nowPlaying.setGravity(Gravity.CENTER_VERTICAL);
     footer.addView(nowPlaying);
-    ImageView record = new ImageView(skin);
+    ImageView record = new ImageView(activity);
     record.setImageDrawable(
-        new TvIcon(skin, "record", ColorStateList.valueOf(TvStyle.color(skin, TvStyle.ACCENT)), 24));
+        new TvIcon(activity, "record", ColorStateList.valueOf(TvStyle.ACCENT), 24));
     record.setPadding(dp(8), dp(8), dp(8), dp(8));
-    record.setBackground(TvStyle.surface(skin, 0xff4a3c60, 0xff2a2237, 24, 0x20e6d5ff));
+    record.setBackground(TvStyle.surface(activity, 0xff4a3c60, 0xff2a2237, 24, 0x20e6d5ff));
     nowPlaying.addView(record, new LinearLayout.LayoutParams(dp(40), dp(40)));
     LinearLayout track = new LinearLayout(activity);
     track.setOrientation(LinearLayout.VERTICAL);
     track.setPadding(dp(10), 0, 0, 0);
     nowPlaying.addView(track, new LinearLayout.LayoutParams(0, -2, 1));
-    title = TvStyle.text(skin, "下一首，就唱你喜欢的", 14, TvStyle.INK);
+    title = TvStyle.text(activity, "下一首，就唱你喜欢的", 14, TvStyle.INK);
     title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     title.setSingleLine();
     title.setEllipsize(android.text.TextUtils.TruncateAt.END);
     title.setOnClickListener(v -> show("stage"));
     track.addView(title);
-    subtitle = TvStyle.text(skin, "点一首歌，开启今晚的好时光", 10, TvStyle.MUTED);
+    subtitle = TvStyle.text(activity, "点一首歌，开启今晚的好时光", 10, TvStyle.MUTED);
     subtitle.setSingleLine();
     subtitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
     subtitle.setPadding(0, dp(5), 0, 0);
@@ -226,15 +216,15 @@ final class NativeRoom extends FrameLayout implements RoomSession.Listener, Auto
     lyricInfo = new LinearLayout(activity);
     lyricInfo.setGravity(Gravity.CENTER_VERTICAL);
     footer.addView(lyricInfo);
-    offsetLabel = TvStyle.text(skin, "歌词原始时间", 12, TvStyle.MUTED);
+    offsetLabel = TvStyle.text(activity, "歌词原始时间", 12, TvStyle.MUTED);
     lyricInfo.addView(offsetLabel);
-    reset = TvStyle.button(skin, "复位", "重置歌词微调", () -> adjust(0, true));
+    reset = TvStyle.button(activity, "复位", "重置歌词微调", () -> adjust(0, true));
     TvStyle.iconOnly(reset, "reset");
     lyricInfo.addView(reset, new LinearLayout.LayoutParams(dp(44), dp(28)));
     controls = new LinearLayout(activity);
     controls.setGravity(Gravity.CENTER_VERTICAL);
     footer.addView(controls);
-    lyricToggle = TvStyle.button(skin, "歌词", "隐藏歌词", this::toggleLyrics);
+    lyricToggle = TvStyle.button(activity, "歌词", "隐藏歌词", this::toggleLyrics);
     TvStyle.iconOnly(lyricToggle, "lyrics");
     controls.addView(lyricToggle, new LinearLayout.LayoutParams(dp(44), -1));
     leftAdjust = adjustGroup(new double[] {10, 3, .5}, false);
@@ -246,38 +236,38 @@ final class NativeRoom extends FrameLayout implements RoomSession.Listener, Auto
     centerParams.leftMargin = dp(8);
     centerParams.rightMargin = dp(8);
     controls.addView(mainControls, centerParams);
-    vocal = TvStyle.button(skin, "伴奏", "切换原唱伴奏", () -> control("vocal"));
+    vocal = TvStyle.button(activity, "伴奏", "切换原唱伴奏", () -> control("vocal"));
     TvStyle.iconOnly(vocal, "mic");
     mainControls.addView(vocal, new LinearLayout.LayoutParams(dp(44), -1));
-    pause = TvStyle.button(skin, "Ⅱ", "暂停", () -> control("pause"));
+    pause = TvStyle.button(activity, "Ⅱ", "暂停", () -> control("pause"));
     LinearLayout.LayoutParams pauseParams = new LinearLayout.LayoutParams(dp(44), -1);
     pauseParams.leftMargin = dp(8);
     pauseParams.rightMargin = dp(8);
     mainControls.addView(pause, pauseParams);
     pause.setTextSize(22);
     TvStyle.primary(pause);
-    next = TvStyle.button(skin, "切歌", "切歌", () -> control("next"));
+    next = TvStyle.button(activity, "切歌", "切歌", () -> control("next"));
     TvStyle.iconOnly(next, "next");
     mainControls.addView(next, new LinearLayout.LayoutParams(dp(44), -1));
     rightAdjust = adjustGroup(new double[] {.5, 3, 10}, true);
     controls.addView(rightAdjust, new LinearLayout.LayoutParams(dp(132), -1));
     controls.addView(new View(activity), new LinearLayout.LayoutParams(0, 1, 1));
-    fullscreen = TvStyle.button(skin, "全屏", "全屏播放", () -> setFull(!full));
+    fullscreen = TvStyle.button(activity, "全屏", "全屏播放", () -> setFull(!full));
     TvStyle.iconOnly(fullscreen, "screen");
     controls.addView(fullscreen, new LinearLayout.LayoutParams(dp(44), -1));
-    status = TvStyle.text(skin, "正在连接播放会话…", 13, TvStyle.INK);
-    status.setBackground(TvStyle.surface(skin, 0xfa362b46, 0xf5231c2e, 10, 0x25e4d4fa));
+    status = TvStyle.text(activity, "正在连接播放会话…", 13, TvStyle.INK);
+    status.setBackground(TvStyle.surface(activity, 0xfa362b46, 0xf5231c2e, 10, 0x25e4d4fa));
     status.setElevation(dp(3));
     status.setPadding(dp(12), dp(8), dp(12), dp(8));
     FrameLayout.LayoutParams statusParams =
         new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
     statusParams.topMargin = dp(8);
     addView(status, statusParams);
-    controlHint = TvStyle.text(skin, "", 11, TvStyle.INK);
+    controlHint = TvStyle.text(activity, "", 11, TvStyle.INK);
     controlHint.setContentDescription("播放控制提示");
     controlHint.setGravity(Gravity.CENTER);
     controlHint.setPadding(dp(10), dp(6), dp(10), dp(6));
-    controlHint.setBackground(TvStyle.surface(skin, 0xfa42354f, 0xfa2b2336, 8, 0x30eadcff));
+    controlHint.setBackground(TvStyle.surface(activity, 0xfa42354f, 0xfa2b2336, 8, 0x30eadcff));
     controlHint.setElevation(dp(3));
     controlHint.setVisibility(GONE);
     controlHint.setFocusable(false);
@@ -301,7 +291,7 @@ final class NativeRoom extends FrameLayout implements RoomSession.Listener, Auto
   }
 
   private Button nav(String text, String page) {
-    Button button = TvStyle.button(skin, text, text, () -> show(page));
+    Button button = TvStyle.button(activity, text, text, () -> show(page));
     button.setGravity(Gravity.CENTER_VERTICAL | Gravity.LEFT);
     button.setTextSize(12);
     button.setPadding(dp(9), 0, dp(6), 0);
@@ -326,7 +316,7 @@ final class NativeRoom extends FrameLayout implements RoomSession.Listener, Auto
       String number = seconds >= 1 ? String.valueOf((int) seconds) : String.valueOf(seconds);
       Button b =
           TvStyle.button(
-              skin,
+              activity,
               number + "\n" + (advance ? "→" : "←"),
               "歌词" + (advance ? "提前 " : "延后 ") + number + " 秒",
               () -> adjust((int) (seconds * 1000) * (advance ? 1 : -1), false));
@@ -373,7 +363,8 @@ final class NativeRoom extends FrameLayout implements RoomSession.Listener, Auto
       child.setVisibility(shortSidebar && child == navCaption ? GONE : VISIBLE);
       if (child instanceof Button) {
         Button button = (Button) child;
-        TvStyle.normal(button);
+        button.setBackground(TvStyle.focus(activity));
+        button.setTextColor(TvStyle.ink());
         TvStyle.restoreSideIcon(button);
         button.setTextSize(12);
         button.setGravity(Gravity.CENTER_VERTICAL | Gravity.LEFT);
@@ -479,7 +470,7 @@ final class NativeRoom extends FrameLayout implements RoomSession.Listener, Auto
       if (button) {
         Button b = (Button) child;
         b.setTextSize(portrait ? 9 : 10);
-        b.setTextColor(TvStyle.color(skin, TvStyle.INK));
+        b.setTextColor(TvStyle.INK);
         TvStyle.phoneTab(b);
         b.setPadding(dp(2), 0, dp(2), 0);
         b.setCompoundDrawables(null, null, null, null);
@@ -547,14 +538,6 @@ final class NativeRoom extends FrameLayout implements RoomSession.Listener, Auto
     offsetLabel.setVisibility(full && lyricsVisible && current != null ? VISIBLE : GONE);
     reset.setVisibility(offsetLabel.getVisibility());
     lyricInfo.setVisibility(offsetLabel.getVisibility());
-  }
-
-  private void refreshAppearance() {
-    setBackgroundColor(TvStyle.color(skin, TvStyle.BACKGROUND));
-    TvStyle.refreshAppearance(this, skin);
-    ((ImageView) nowPlaying.getChildAt(0)).setImageDrawable(new TvIcon(skin, "record",
-        ColorStateList.valueOf(TvStyle.color(skin, TvStyle.ACCENT)), 24));
-    catalogue.refreshAppearance();
   }
 
   private void show(String value) {

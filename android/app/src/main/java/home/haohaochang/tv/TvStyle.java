@@ -2,22 +2,13 @@ package home.haohaochang.tv;
 
 import android.content.Context;
 import android.content.res.ColorStateList;
-import android.graphics.Bitmap;
-import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Paint;
-import android.graphics.Path;
-import android.graphics.Rect;
-import android.graphics.RectF;
 import android.graphics.Typeface;
-import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.view.Gravity;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.TextView;
 
 final class TvStyle {
@@ -35,98 +26,17 @@ final class TvStyle {
   }
 
   static GradientDrawable shape(Context c, int color, int radius) {
-    return new Surface(c, color, color, radius, 0, true);
+    GradientDrawable d = new GradientDrawable();
+    d.setColor(color);
+    d.setCornerRadius(dp(c, radius));
+    return d;
   }
 
   static GradientDrawable surface(Context c, int top, int bottom, int radius, int edge) {
-    return new Surface(c, top, bottom, radius, edge, false);
-  }
-
-  private static final class Surface extends GradientDrawable {
-    private final int top, bottom, radius, edge;
-    private final boolean solid;
-    private final Bitmap texture;
-    private final Path outline;
-    private final Paint texturePaint;
-    private final int pixelRadius;
-    private boolean overrideFill;
-
-    Surface(Context c, int top, int bottom, int radius, int edge, boolean solid) {
-      super(Orientation.TL_BR, new int[] {top, bottom});
-      this.top = top;
-      this.bottom = bottom;
-      this.radius = radius;
-      this.edge = edge;
-      this.solid = solid;
-      TvAppearance appearance = TvAppearance.of(c);
-      boolean hasFill = top != Color.TRANSPARENT || bottom != Color.TRANSPARENT;
-      texture = appearance == null || !hasFill ? null : appearance.texture();
-      outline = texture == null ? null : new Path();
-      texturePaint = texture == null ? null : new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
-      pixelRadius = dp(c, appearance == null ? radius : appearance.radius(radius));
-      setCornerRadius(pixelRadius);
-      if (appearance == null) {
-        if (solid) setColor(top);
-        if (edge != 0) setStroke(dp(c, 1), edge);
-      } else {
-        if (hasFill) setColors(appearance.fill());
-        else setColor(Color.TRANSPARENT);
-        if (edge != 0) setStroke(dp(c, 1), appearance.materialEdge());
-      }
-    }
-
-    Drawable restyle(Context c) { return new Surface(c, top, bottom, radius, edge, solid); }
-
-    @Override public void setColor(int color) {
-      overrideFill = true;
-      super.setColor(color);
-    }
-
-    @Override protected void onBoundsChange(Rect bounds) {
-      super.onBoundsChange(bounds);
-      if (outline == null) return;
-      outline.reset();
-      outline.addRoundRect(new RectF(bounds), pixelRadius, pixelRadius, Path.Direction.CW);
-    }
-
-    @Override public void draw(Canvas canvas) {
-      super.draw(canvas);
-      if (texture == null || overrideFill) return;
-      int save = canvas.save();
-      canvas.clipPath(outline);
-      texturePaint.setAlpha(getAlpha());
-      canvas.drawBitmap(texture, null, getBounds(), texturePaint);
-      canvas.restoreToCount(save);
-    }
-  }
-
-  private enum Role { CARD, PHOTO, NORMAL, COMPACT, PRIMARY, SUBTLE }
-
-  private static final class ButtonSurface extends StateListDrawable {
-    final Role role;
-    ButtonSurface(Role role) { this.role = role; }
-  }
-
-  private static StateListDrawable themed(Context c, Role role, TvAppearance appearance) {
-    StateListDrawable states = new ButtonSurface(role);
-    int radius = role == Role.PRIMARY ? 24 : role == Role.CARD || role == Role.PHOTO ? 12 : 10;
-    int accent = appearance.accent();
-    boolean transparent = role == Role.SUBTLE || role == Role.PHOTO || role == Role.COMPACT;
-    GradientDrawable focused = shape(c, Color.TRANSPARENT, radius);
-    if (role != Role.PHOTO) focused.setColor(TvAppearance.blend(appearance.fill()[0], accent, .16f));
-    focused.setStroke(dp(c, 2), accent);
-    states.addState(new int[] {android.R.attr.state_focused}, focused);
-    states.addState(new int[] {android.R.attr.state_activated}, focused);
-    GradientDrawable selected = shape(c, Color.TRANSPARENT, radius);
-    if (role != Role.PHOTO) selected.setColor(accent);
-    selected.setStroke(dp(c, 1), accent);
-    states.addState(new int[] {android.R.attr.state_selected}, selected);
-    states.addState(new int[] {android.R.attr.state_pressed}, selected);
-    GradientDrawable normal = shape(c, transparent ? Color.TRANSPARENT : SURFACE, radius);
-    if (role == Role.PRIMARY) normal.setColor(accent);
-    else if (!transparent || role == Role.PHOTO) normal.setStroke(dp(c, 1), appearance.materialEdge());
-    states.addState(new int[] {}, normal);
-    return states;
+    GradientDrawable d = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[] {top, bottom});
+    d.setCornerRadius(dp(c, radius));
+    if (edge != 0) d.setStroke(dp(c, 1), edge);
+    return d;
   }
 
   static GradientDrawable panel(Context c) {
@@ -138,9 +48,7 @@ final class TvStyle {
   }
 
   static StateListDrawable card(Context c) {
-    TvAppearance appearance = TvAppearance.of(c);
-    if (appearance != null) return themed(c, Role.CARD, appearance);
-    StateListDrawable d = new ButtonSurface(Role.CARD);
+    StateListDrawable d = new StateListDrawable();
     GradientDrawable focused = surface(c, 0xff4a3c63, 0xff30263e, 12, 0);
     focused.setStroke(dp(c, 2), 0xffc9b3f8);
     d.addState(new int[] {android.R.attr.state_activated}, focused);
@@ -151,9 +59,7 @@ final class TvStyle {
   }
 
   static StateListDrawable photoCardOutline(Context c) {
-    TvAppearance appearance = TvAppearance.of(c);
-    if (appearance != null) return themed(c, Role.PHOTO, appearance);
-    StateListDrawable states = new ButtonSurface(Role.PHOTO);
+    StateListDrawable states = new StateListDrawable();
     GradientDrawable focused = shape(c, Color.TRANSPARENT, 12);
     focused.setStroke(dp(c, 2), 0xffe1c8ff);
     states.addState(new int[] {android.R.attr.state_activated}, focused);
@@ -166,9 +72,7 @@ final class TvStyle {
   }
 
   static StateListDrawable focus(Context c) {
-    TvAppearance appearance = TvAppearance.of(c);
-    if (appearance != null) return themed(c, Role.NORMAL, appearance);
-    StateListDrawable d = new ButtonSurface(Role.NORMAL);
+    StateListDrawable d = new StateListDrawable();
     GradientDrawable focused = surface(c, 0xff4b3b64, 0xff33283e, 10, 0);
     focused.setStroke(dp(c, 2), 0xffe1c8ff);
     d.addState(new int[] {android.R.attr.state_focused}, focused);
@@ -181,14 +85,6 @@ final class TvStyle {
   }
 
   static ColorStateList ink() {
-    return buttonInk(null, false);
-  }
-
-  private static ColorStateList buttonInk(TvAppearance appearance, boolean primary) {
-    int text = appearance == null ? INK : appearance.ink();
-    int selected = appearance == null ? BACKGROUND : appearance.accentInk();
-    int disabled = appearance == null ? 0xff766a84 : appearance.muted();
-    if (primary) text = appearance == null ? Color.WHITE : selected;
     return new ColorStateList(
         new int[][] {
           new int[] {-android.R.attr.state_enabled},
@@ -198,33 +94,15 @@ final class TvStyle {
           new int[] {android.R.attr.state_selected},
           new int[] {}
         },
-        new int[] {disabled, appearance == null && primary ? Color.WHITE : appearance == null ? INK : appearance.ink(),
-          text, selected, selected, text});
+        new int[] {0xff766a84, INK, INK, BACKGROUND, BACKGROUND, INK});
   }
 
   static TextView text(Context c, String value, int size, int color) {
     TextView v = new TextView(c);
     v.setText(value);
     v.setTextSize(size);
-    textColor(v, color);
+    v.setTextColor(color);
     return v;
-  }
-
-  static void textColor(TextView view, int color) {
-    view.setTag(R.id.appearance_text_color, color);
-    view.setTextColor(color(view.getContext(), color));
-  }
-
-  static int color(Context c, int original) {
-    TvAppearance appearance = TvAppearance.of(c);
-    if (appearance == null) return original;
-    switch (original) {
-      case BACKGROUND: return appearance.page();
-      case MUTED: return appearance.muted();
-      case ACCENT: return appearance.accent();
-      case INK: return appearance.ink();
-      default: return original;
-    }
   }
 
   static Button button(Context c, String text, String label, Runnable action) {
@@ -240,7 +118,7 @@ final class TvStyle {
     b.setTextSize(14);
     b.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
     b.setGravity(Gravity.CENTER);
-    b.setTextColor(buttonInk(TvAppearance.of(c), false));
+    b.setTextColor(ink());
     b.setBackground(focus(c));
     b.setMinWidth(0);
     b.setMinimumWidth(0);
@@ -254,20 +132,19 @@ final class TvStyle {
 
   static void icon(Button button, String name) {
     if (button instanceof TouchButton) ((TouchButton) button).sideIcon = name;
-    TvIcon icon = new TvIcon(button.getContext(), name, buttonInk(TvAppearance.of(button.getContext()), false), 19);
+    TvIcon icon = new TvIcon(button.getContext(), name, ink(), 19);
     button.setCompoundDrawablesRelative(icon, null, null, null);
     button.setCompoundDrawablePadding(dp(button.getContext(), 7));
   }
 
+  static void restoreSideIcon(Button button) {
+    if (button instanceof TouchButton && ((TouchButton) button).sideIcon != null)
+      icon(button, ((TouchButton) button).sideIcon);
+  }
+
   static void phoneTab(Button button) {
     Context c = button.getContext();
-    TvAppearance appearance = TvAppearance.of(c);
-    if (appearance != null) {
-      button.setBackground(themed(c, Role.COMPACT, appearance));
-      button.setTextColor(buttonInk(appearance, false));
-      return;
-    }
-    StateListDrawable states = new ButtonSurface(Role.COMPACT);
+    StateListDrawable states = new StateListDrawable();
     states.addState(new int[] {android.R.attr.state_selected}, surface(c, 0xff4b3d62, 0xff332840, 8, 0x30ead7ff));
     states.addState(new int[] {android.R.attr.state_pressed}, surface(c, 0xff5b4778, 0xff40304f, 8, 0x40ead7ff));
     states.addState(new int[] {}, shape(c, Color.TRANSPARENT, 6));
@@ -276,14 +153,7 @@ final class TvStyle {
 
   static void primary(Button button) {
     Context c = button.getContext();
-    TvAppearance appearance = TvAppearance.of(c);
-    if (appearance != null) {
-      button.setBackground(themed(c, Role.PRIMARY, appearance));
-      button.setElevation(dp(c, 3));
-      button.setTextColor(buttonInk(appearance, true));
-      return;
-    }
-    StateListDrawable states = new ButtonSurface(Role.PRIMARY);
+    StateListDrawable states = new StateListDrawable();
     GradientDrawable focused = surface(c, 0xff9b80ef, 0xff6750c4, 24, 0);
     focused.setStroke(dp(c, 3), 0xffe1c8ff);
     states.addState(new int[] {android.R.attr.state_focused}, focused);
@@ -296,13 +166,7 @@ final class TvStyle {
 
   static void subtle(Button button) {
     Context c = button.getContext();
-    TvAppearance appearance = TvAppearance.of(c);
-    if (appearance != null) {
-      button.setBackground(themed(c, Role.SUBTLE, appearance));
-      button.setTextColor(buttonInk(appearance, false));
-      return;
-    }
-    StateListDrawable states = new ButtonSurface(Role.SUBTLE);
+    StateListDrawable states = new StateListDrawable();
     GradientDrawable focused = shape(c, 0x224d3b68, 8);
     focused.setStroke(dp(c, 2), 0xffe1c8ff);
     states.addState(new int[] {android.R.attr.state_focused}, focused);
@@ -314,8 +178,7 @@ final class TvStyle {
 
   /** Direct touch gets a short response; D-pad navigation remains immediate. */
   private static final class TouchButton extends Button {
-    String sideIcon, glyph;
-    boolean primaryGlyph;
+    String sideIcon;
     TouchButton(Context context) { super(context); }
 
     @Override public boolean onTouchEvent(android.view.MotionEvent event) {
@@ -345,14 +208,8 @@ final class TvStyle {
   }
 
   static void glyph(Button button, String name, boolean primary) {
-    if (button instanceof TouchButton) {
-      TouchButton themed = (TouchButton) button;
-      themed.glyph = name;
-      themed.primaryGlyph = primary;
-    }
     button.setText("");
     button.setCompoundDrawables(null, null, null, null);
-    TvAppearance appearance = TvAppearance.of(button.getContext());
     ColorStateList colors =
         new ColorStateList(
             new int[][] {
@@ -361,57 +218,8 @@ final class TvStyle {
               new int[] {android.R.attr.state_selected},
               new int[] {}
             },
-            appearance == null
-                ? new int[] {0xff625c72, Color.WHITE, ACCENT, primary ? Color.WHITE : 0xffc4bbd5}
-                : new int[] {appearance.muted(), appearance.ink(), appearance.accentInk(),
-                    primary ? appearance.accentInk() : appearance.ink()});
+            new int[] {0xff625c72, Color.WHITE, ACCENT, primary ? Color.WHITE : 0xffc4bbd5});
     button.setForeground(new TvIcon(button.getContext(), name, colors, primary ? 21 : 20));
     button.setForegroundGravity(Gravity.CENTER);
-  }
-
-  static void normal(Button button) {
-    button.setBackground(focus(button.getContext()));
-    button.setTextColor(buttonInk(TvAppearance.of(button.getContext()), false));
-  }
-
-  static void restoreSideIcon(Button button) {
-    if (button instanceof TouchButton && ((TouchButton) button).sideIcon != null)
-      icon(button, ((TouchButton) button).sideIcon);
-  }
-
-  static void refreshAppearance(View view, Context skin) {
-    Drawable background = view.getBackground();
-    if (background instanceof Surface) view.setBackground(((Surface) background).restyle(skin));
-    if (view instanceof TouchButton && background instanceof ButtonSurface) {
-      TouchButton button = (TouchButton) view;
-      Role role = ((ButtonSurface) background).role;
-      switch (role) {
-        case PRIMARY: primary(button); break;
-        case SUBTLE: subtle(button); break;
-        case COMPACT:
-          button.setTextColor(color(skin, INK));
-          phoneTab(button);
-          break;
-        default: normal(button); break;
-      }
-      if (button.glyph != null) glyph(button, button.glyph, button.primaryGlyph);
-      else if (button.sideIcon != null && role != Role.COMPACT) icon(button, button.sideIcon);
-    } else {
-      if (background instanceof ButtonSurface) {
-        Role role = ((ButtonSurface) background).role;
-        view.setBackground(role == Role.CARD ? card(skin) : focus(skin));
-      }
-      if (view.getForeground() instanceof ButtonSurface) view.setForeground(photoCardOutline(skin));
-      if (view instanceof TextView) {
-        Object original = view.getTag(R.id.appearance_text_color);
-        if (original instanceof Integer)
-          ((TextView) view).setTextColor(color(view.getContext(), (Integer) original));
-        if (view instanceof EditText) ((EditText) view).setHintTextColor(color(skin, MUTED));
-      }
-    }
-    if (view instanceof ViewGroup) {
-      ViewGroup group = (ViewGroup) view;
-      for (int i = 0; i < group.getChildCount(); i++) refreshAppearance(group.getChildAt(i), skin);
-    }
   }
 }

@@ -117,13 +117,6 @@ final class TvIcon extends Drawable {
         canvas.drawCircle(12, 16, 2, paint);
         canvas.drawCircle(19, 9, 2, paint);
         break;
-      case "palette":
-        canvas.drawOval(3, 3, 21, 21, paint);
-        canvas.drawCircle(8, 9, 1, paint);
-        canvas.drawCircle(12, 7, 1, paint);
-        canvas.drawCircle(16, 9, 1, paint);
-        canvas.drawCircle(9, 15, 1, paint);
-        break;
       case "record":
         canvas.drawCircle(12, 12, 9, paint);
         canvas.drawCircle(12, 12, 2, paint);

@@ -7,8 +7,8 @@ android {
         applicationId 'home.haohaochang.tv'
         minSdk 23
         targetSdk 28
-        versionCode 44
-        versionName '1.1.5.1'
+        versionCode 45
+        versionName '1.1.5.2'
         manifestPlaceholders = [appLabel: '好好唱 KTV']
     }
     signingConfigs {

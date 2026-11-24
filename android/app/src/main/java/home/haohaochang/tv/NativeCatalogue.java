@@ -2,8 +2,6 @@ package home.haohaochang.tv;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.Context;
-import android.graphics.Color;
 import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -35,7 +33,6 @@ import org.json.JSONObject;
 /** Recycled native grid. Decode thumbnails off the UI thread with a bounded bitmap cache. */
 final class NativeCatalogue extends LinearLayout implements AutoCloseable {
   private final Activity activity;
-  private final Context skin;
   private final RoomSession session;
   private final GridView grid;
   private final TextView heading, empty, description, breadcrumb;
@@ -84,45 +81,40 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
   private String initialQuery = "";
 
   NativeCatalogue(Activity activity, RoomSession session) {
-    this(activity, session, activity);
-  }
-
-  NativeCatalogue(Activity activity, RoomSession session, Context skin) {
-    super(skin);
+    super(activity);
     this.activity = activity;
     this.session = session;
-    this.skin = skin;
     setOrientation(VERTICAL);
     setBackgroundColor(android.graphics.Color.TRANSPARENT);
     setPadding(dp(24), dp(16), dp(20), dp(12));
-    breadcrumb = TvStyle.text(skin, "我的客厅    /    家庭 KTV", 9, TvStyle.MUTED);
+    breadcrumb = TvStyle.text(activity, "我的客厅    /    家庭 KTV", 9, TvStyle.MUTED);
     addView(breadcrumb, new LayoutParams(-1, dp(24)));
-    heading = TvStyle.text(skin, "今晚，唱点开心的。", 26, TvStyle.INK);
+    heading = TvStyle.text(activity, "今晚，唱点开心的。", 26, TvStyle.INK);
     heading.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
     addView(heading, new LayoutParams(-1, dp(42)));
-    description = TvStyle.text(skin, "一首熟悉的旋律，一屋子喜欢的人。", 12, TvStyle.MUTED);
+    description = TvStyle.text(activity, "一首熟悉的旋律，一屋子喜欢的人。", 12, TvStyle.MUTED);
     addView(description, new LayoutParams(-1, dp(28)));
     query = new LinearLayout(activity);
     query.setGravity(Gravity.CENTER_VERTICAL);
     addView(query, new LayoutParams(-1, dp(46)));
-    search = new EditText(skin);
+    search = new EditText(activity);
     search.setSingleLine();
     search.setTextSize(16);
-    TvStyle.textColor(search, TvStyle.INK);
-    search.setHintTextColor(TvStyle.color(skin, TvStyle.MUTED));
+    search.setTextColor(TvStyle.INK);
+    search.setHintTextColor(TvStyle.MUTED);
     search.setHint("歌名 / 歌手 / 拼音首字母");
-    search.setBackground(TvStyle.focus(skin));
+    search.setBackground(TvStyle.focus(activity));
     search.setContentDescription("搜索歌名或歌手");
     search.setPadding(dp(12), 0, dp(12), 0);
     search.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
     query.addView(search, new LayoutParams(0, -1, 1));
-    find = TvStyle.button(skin, "搜索", "搜索", this::search);
+    find = TvStyle.button(activity, "搜索", "搜索", this::search);
     LayoutParams findParams = new LayoutParams(dp(72), -1);
     findParams.leftMargin = dp(10);
     query.addView(find, findParams);
     sort =
         TvStyle.button(
-            skin,
+            activity,
             "歌名排序",
             "切换歌名排序或随机",
             () -> {
@@ -141,12 +133,12 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
         });
     progressRow = new LinearLayout(activity);
     progressRow.setGravity(Gravity.CENTER_VERTICAL);
-    progressLabel = TvStyle.text(skin, "", 11, TvStyle.MUTED);
+    progressLabel = TvStyle.text(activity, "", 11, TvStyle.MUTED);
     progressLabel.setSingleLine();
     progressLabel.setEllipsize(TextUtils.TruncateAt.END);
     progressBar = new ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal);
     progressBar.setMax(100);
-    progressBar.setProgressTintList(ColorStateList.valueOf(TvStyle.color(skin, TvStyle.ACCENT)));
+    progressBar.setProgressTintList(ColorStateList.valueOf(TvStyle.ACCENT));
     progressRow.addView(progressLabel, new LayoutParams(0, -1, 1));
     progressRow.addView(progressBar, new LayoutParams(dp(100), dp(10)));
     progressRow.setContentDescription("当前找歌进度");
@@ -201,7 +193,7 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
     initialsPanel.setOrientation(VERTICAL);
     initialsPanel.setPadding(0, dp(14), dp(14), 0);
     results.addView(initialsPanel, new LayoutParams(dp(150), -1));
-    initialLabel = TvStyle.text(skin, "拼音首字母", 12, TvStyle.MUTED);
+    initialLabel = TvStyle.text(activity, "拼音首字母", 12, TvStyle.MUTED);
     initialLabel.setSingleLine();
     initialsPanel.addView(initialLabel, new LayoutParams(-1, dp(28)));
     for (int row = 0; row < 7; row++) {
@@ -212,7 +204,7 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
         String text = index < 26 ? String.valueOf((char) ('A' + index)) : index == 26 ? "←" : "清";
         Button button =
             TvStyle.button(
-                skin,
+                activity,
                 text,
                 index < 26 ? "首字母 " + text : index == 26 ? "退格" : "清空",
                 () -> {
@@ -235,7 +227,7 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
       }
     }
     catalogueTools = new LinearLayout(activity);
-    exact = TvStyle.button(skin, "", "精确搜索", () -> {
+    exact = TvStyle.button(activity, "", "精确搜索", () -> {
       exactSearch = !exactSearch;
       query.setVisibility(exactSearch ? VISIBLE : GONE);
       if (exactSearch) search.requestFocus();
@@ -250,7 +242,7 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
     for (int i = 0; i < randomButtons.length; i++) {
       int count = (i + 1) * 10;
       String label = "随机点 " + count + " 首";
-      Button button = TvStyle.button(skin, label, label, () -> enqueueRandom(count));
+      Button button = TvStyle.button(activity, label, label, () -> enqueueRandom(count));
       TvStyle.subtle(button);
       button.setTextSize(12);
       randomButtons[i] = button;
@@ -259,7 +251,7 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
     results.addView(playlistTools, new LayoutParams(dp(150), -1));
     playlistTools.setVisibility(GONE);
     results.addView(grid, new LayoutParams(0, -1, 1));
-    empty = TvStyle.text(skin, "正在读取…", 16, TvStyle.MUTED);
+    empty = TvStyle.text(activity, "正在读取…", 16, TvStyle.MUTED);
     empty.setGravity(Gravity.CENTER);
     empty.setSingleLine();
     empty.setEllipsize(TextUtils.TruncateAt.END);
@@ -267,7 +259,7 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
     grid.setEmptyView(empty);
     more =
         TvStyle.button(
-            skin,
+            activity,
             "下一页",
             "下一页",
             () -> {
@@ -311,14 +303,6 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
       }, true);
     }
   };
-
-  void refreshAppearance() {
-    TvAppearance appearance = TvAppearance.of(skin);
-    int backdrop = appearance == null ? Color.TRANSPARENT : (appearance.page() & 0x00ffffff) | 0xcc000000;
-    setBackgroundColor(backdrop);
-    progressBar.setProgressTintList(ColorStateList.valueOf(TvStyle.color(skin, TvStyle.ACCENT)));
-    grid.invalidateViews();
-  }
 
   private int dp(float n) {
     return TvStyle.dp(activity, n);
@@ -840,26 +824,26 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
       ImageView image;
       TextView title, detail, action;
       if (convert == null) {
-        card = new LinearLayout(skin);
+        card = new LinearLayout(activity);
         card.setOrientation(VERTICAL);
         card.setPadding(dp(5), dp(5), dp(5), dp(7));
-        card.setBackground(TvStyle.card(skin));
+        card.setBackground(TvStyle.card(activity));
         card.setElevation(dp(2));
         image = new ImageView(activity);
         image.setScaleType(ImageView.ScaleType.CENTER_CROP);
         image.setClipToOutline(true);
         card.addView(image, new LayoutParams(-1, dp(102)));
-        title = TvStyle.text(skin, "", 13, TvStyle.INK);
+        title = TvStyle.text(activity, "", 13, TvStyle.INK);
         title.setMaxLines(1);
         title.setEllipsize(TextUtils.TruncateAt.END);
         title.setPadding(dp(5), dp(8), dp(5), 0);
         card.addView(title, new LayoutParams(-1, dp(30)));
-        detail = TvStyle.text(skin, "", 10, TvStyle.MUTED);
+        detail = TvStyle.text(activity, "", 10, TvStyle.MUTED);
         detail.setSingleLine();
         detail.setEllipsize(TextUtils.TruncateAt.END);
         detail.setPadding(dp(5), 0, dp(5), 0);
         card.addView(detail, new LayoutParams(-1, dp(22)));
-        action = TvStyle.text(skin, "＋ 点歌", 10, TvStyle.ACCENT);
+        action = TvStyle.text(activity, "＋ 点歌", 10, TvStyle.ACCENT);
         action.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         action.setPadding(dp(5), 0, dp(6), 0);
         card.addView(action, new LayoutParams(-1, dp(22)));
@@ -922,10 +906,10 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
       ImageView image;
       TextView title, detail;
       if (convert == null) {
-        card = new FrameLayout(skin);
-        card.setBackground(TvStyle.shape(skin, TvStyle.SURFACE, 12));
+        card = new FrameLayout(activity);
+        card.setBackground(TvStyle.shape(activity, TvStyle.SURFACE, 12));
         card.setClipToOutline(true);
-        card.setForeground(TvStyle.photoCardOutline(skin));
+        card.setForeground(TvStyle.photoCardOutline(activity));
         image = new ImageView(activity);
         card.addView(image, new FrameLayout.LayoutParams(-1, -1));
         LinearLayout caption = new LinearLayout(activity);
@@ -937,7 +921,7 @@ final class NativeCatalogue extends LinearLayout implements AutoCloseable {
         title.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         title.setSingleLine();
         title.setEllipsize(TextUtils.TruncateAt.END);
-        detail = TvStyle.text(skin, "", 10, 0xffd4c3e0);
+        detail = TvStyle.text(activity, "", 10, 0xffd4c3e0);
         detail.setSingleLine();
         caption.addView(title, new LayoutParams(-1, -2));
         caption.addView(detail, new LayoutParams(-1, -2));

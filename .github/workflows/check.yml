@@ -1,7 +1,7 @@
-name: Sign Haohaochang TV v1.1.5.1
+name: Sign Haohaochang TV v1.1.5.2
 on:
   push:
-    branches: [codex/tv-v1.1.5.1-official-signing]
+    branches: [codex/tv-v1.1.5.2-official-signing]
 permissions:
   contents: read
 jobs:
@@ -32,12 +32,12 @@ jobs:
           unset TV_KEYSTORE_BASE64
           gradle -p android --no-daemon assembleRelease
           mkdir -p signed
-          cp android/app/build/outputs/apk/release/app-release.apk signed/haohaochang-tv-v1.1.5.1.apk
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify signed/haohaochang-tv-v1.1.5.1.apk
+          cp android/app/build/outputs/apk/release/app-release.apk signed/haohaochang-tv-v1.1.5.2.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify signed/haohaochang-tv-v1.1.5.2.apk
           git rev-parse HEAD > signed/SOURCE_COMMIT.txt
-          (cd signed && sha256sum haohaochang-tv-v1.1.5.1.apk > SHA256SUMS.txt)
+          (cd signed && sha256sum haohaochang-tv-v1.1.5.2.apk > SHA256SUMS.txt)
       - uses: actions/upload-artifact@v4
         with:
-          name: haohaochang-tv-v1.1.5.1
+          name: haohaochang-tv-v1.1.5.2
           path: signed/
           if-no-files-found: error
